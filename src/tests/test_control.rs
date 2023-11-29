@@ -98,7 +98,7 @@ const IP_NODE: &str = "127.0.0.1:4191";
 const DEFAULT_CONFIG: &str = "default_config.json";
 
 async fn generate_keypair(client: &mut AdnlClient) -> Result<Arc<dyn KeyOption>> {
-    let answer: KeyHash = request(client, GenerateKeyPair).await?;
+    let answer: KeyHash = request(client, GenerateKeyPair{key_type: Ed25519KeyOption::KEY_TYPE}).await?;
     Ok(Ed25519KeyOption::from_public_key(answer.key_hash().as_slice()))
 }
 

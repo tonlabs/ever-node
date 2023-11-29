@@ -1,4 +1,5 @@
 NODES=6
+NODES=10
 WORKCHAINS=false
 CURRENT_BRANCH="$(git branch --show-current)"
 
@@ -35,10 +36,14 @@ pkill -9 ton_node
 TEST_ROOT=$(pwd);
 NODE_TARGET=$TEST_ROOT/../../target/release/
 
+#skip config generation
+if true; then
+#if false; then
+
 ./remove_junk.sh $NODE_TARGET $NODES > /dev/null 2>&1
 echo "Building $(pwd)"
 
-if ! cargo build --release
+if ! cargo build --release --features workchains
 then
     exit 1
 fi
@@ -70,6 +75,7 @@ echo "  IP = $NOWIP"
 
 declare -a VALIDATOR_PUB_KEY_HEX=();
 declare -a VALIDATOR_PUB_KEY_BASE64=();
+declare -a VALIDATOR_BLS_PUB_KEY_HEX=();
 
 # Fake config just to start nodes
 cat $TEST_ROOT/ton-global.config_1.json > $NODE_TARGET/ton-global.config.json
@@ -153,7 +159,9 @@ do
     
     # 0 is full node
     if [ $N -ne 0 ]; then
-        CONSOLE_OUTPUT=$(./console -C $TEST_ROOT/tmp/console$N.json -c newkey | cut -c 92-)
+        CONSOLE_OUTPUT=$(./console -C $TEST_ROOT/tmp/console$N.json -c newkey)
+        PERM_KEY_HEX=$(echo "$CONSOLE_OUTPUT" | sed -n -e 's/received public key hash: \([0-9a-fA-F]*\).*/\1/p')        
+        CONSOLE_OUTPUT=$(echo "$CONSOLE_OUTPUT" | cut -c 92-)
         ./console -C $TEST_ROOT/tmp/console$N.json -c "addpermkey ${CONSOLE_OUTPUT} ${NOWDATE} 1610000000" > tmp_output_console
         CONSOLE_OUTPUT=$(./console -C $TEST_ROOT/tmp/console$N.json -c "exportpub ${CONSOLE_OUTPUT}")
         # echo $CONSOLE_OUTPUT
@@ -161,10 +169,31 @@ do
         # VALIDATOR_PUB_KEY_BASE64[$N]=$(echo "${CONSOLE_OUTPUT}" | grep 'imported key:' | awk '{print $4}')
         # echo "INFO: VALIDATOR_PUB_KEY_HEX[$N] = ${VALIDATOR_PUB_KEY_HEX[$N]}"
         # echo "INFO: VALIDATOR_PUB_KEY_BASE64[$N] = ${VALIDATOR_PUB_KEY_BASE64[$N]}"
+
+        BLS_CONSOLE_OUTPUT=$(./console -C $TEST_ROOT/console$N.json -c "newkey bls")
+        echo "INFO(keys bls request 1): $BLS_CONSOLE_OUTPUT"
+        BLS_KEY_HEX=$(echo "$BLS_CONSOLE_OUTPUT" | sed -n -e 's/received public key hash: \([0-9a-fA-F]*\).*/\1/p')
+        echo "INFO(keys bls request 2): $BLS_KEY_HEX"
+
+        rm tmp_output_console > /dev/null 2>&1
+        ./console -C $TEST_ROOT/console$N.json -c "addblskey ${PERM_KEY_HEX} ${BLS_KEY_HEX} 1610000000" > tmp_output_console
+
+        BLS_CONSOLE_OUTPUT=$(./console -C $TEST_ROOT/console$N.json -c "exportpub $BLS_KEY_HEX")
+        echo "INFO(keys bls): $BLS_CONSOLE_OUTPUT"
+
+        VALIDATOR_BLS_PUB_KEY_HEX[$N]=$(echo "${BLS_CONSOLE_OUTPUT}" | grep 'imported key:' | awk '{print $3}')
+
+        ./console -C $TEST_ROOT/console$N.json -c "addblskey ${VALIDATOR_BLS_PUB_KEY_HEX[$N]} ${VALIDATOR_PUB_KEY_HEX[$N]} 1610000000" > tmp_output_console
+
+        # VALIDATOR_PUB_KEY_BASE64[$N]=$(echo "${CONSOLE_OUTPUT}" | grep 'imported key:' | awk '{print $4}')
+        echo "INFO: VALIDATOR_PUB_KEY_HEX[$N] = ${VALIDATOR_PUB_KEY_HEX[$N]}"
+        echo "INFO: VALIDATOR_BLS_PUB_KEY_HEX[$N] = ${VALIDATOR_BLS_PUB_KEY_HEX[$N]}"
+        # echo "INFO: VALIDATOR_PUB_KEY_BASE64[$N] = ${VALIDATOR_PUB_KEY_BASE64[$N]}"
     fi
 
     cp $NODE_TARGET/config.json $TEST_ROOT/tmp/config$N.json
 
+    echo "Kill ton_node (expected)"
     pkill -9 ton_node
 
 done
@@ -187,7 +216,8 @@ for (( N=1; N <= $NODES; N++ ))
 do
     echo "  Validator #$N contract processing..."
 
-    printf "{ \"public_key\": \"${VALIDATOR_PUB_KEY_HEX[$N]}\", \"weight\": \"$WEIGHT\"}" >> $TEST_ROOT/tmp/zero_state.json
+    printf "{ \"public_key\": \"${VALIDATOR_PUB_KEY_HEX[$N]}\", \"bls_public_key\": \"${VALIDATOR_BLS_PUB_KEY_HEX[$N]}\", \"weight\": \"$WEIGHT\"}" >> $TEST_ROOT/tmp/zero_state.json
+
     if [ ! $N -eq $NODES ]
     then
         printf ",\n" >> $TEST_ROOT/tmp/zero_state.json
@@ -208,6 +238,9 @@ echo "Global config generating..."
 cd $TEST_ROOT
 cat ton-global.config_1.json >> tmp/ton-global.config.json
 cd $TOOLS_ROOT/target/release
+
+#echo "TEMP check"
+#exit 0
 
 for (( N=1; N <= $NODES; N++ ))
 do
@@ -232,6 +265,9 @@ jq ".validator.zero_state = $(jq .zero_state $TOOLS_ROOT/target/release/config.j
 sed "s/-9223372036854776000/-9223372036854775808/g" $TEST_ROOT/tmp/ton-global.config.json.tmp > $TEST_ROOT/tmp/ton-global.config.json
 cp $TEST_ROOT/tmp/ton-global.config.json $NODE_TARGET/ton-global.config.json
 
+#for skipping config generation
+fi
+
 echo "Starting nodes..."
 
 cd $NODE_TARGET
@@ -255,6 +291,10 @@ done
 
 date
 echo "Started"
+
+if false; then
+echo "Waiting 10mins for 200th master block"
+sleep 600
 
 exit 0
 
@@ -297,3 +337,7 @@ exit 0
 
 
 # echo "TEST PASSED"
+
+echo "TEST PASSED"
+
+fi

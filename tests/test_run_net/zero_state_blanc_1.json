@@ -218,12 +218,13 @@
         "next_frac": 21845
       },
       "p28": {
+        "isolate_mc_validators": true,
         "shuffle_mc_validators": true,
         "isolate_mc_validators": false,
         "mc_catchain_lifetime": 250,
         "shard_catchain_lifetime": 250,
         "shard_validators_lifetime": 1000,
-        "shard_validators_num": 4
+        "shard_validators_num": 5
       },
       "p29": {
         "new_catchain_ids": true,

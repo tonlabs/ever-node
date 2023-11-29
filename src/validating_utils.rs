@@ -28,6 +28,7 @@ pub fn supported_capabilities() -> u64 {
         GlobalCapabilities::CapReportVersion as u64 |
         GlobalCapabilities::CapShortDequeue as u64 |
         GlobalCapabilities::CapRemp as u64 |
+        GlobalCapabilities::CapSmft as u64 |
         GlobalCapabilities::CapInitCodeHash as u64 |
         GlobalCapabilities::CapOffHypercube as u64 |
         GlobalCapabilities::CapFixTupleIndexBug as u64 |

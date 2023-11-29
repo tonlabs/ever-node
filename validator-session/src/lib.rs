@@ -33,7 +33,7 @@ mod vector_bool;
 mod vote_candidate;
 
 pub use cache::*;
-use catchain::{function, CatchainPtr};
+use catchain::CatchainPtr;
 use task_queue::{CallbackTaskQueuePtr, CompletionHandlerProcessor, TaskQueuePtr};
 use std::{any::Any, cell::RefCell, fmt, rc::Rc, sync::{Arc, Weak}};
 

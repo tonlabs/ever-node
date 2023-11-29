@@ -13,7 +13,6 @@
 
 /// Imports
 use crate::{
-    serialize_tl_boxed_object, 
     BlockHash, BlockPayloadPtr, CatchainFactory, PrivateKey, PublicKey, PublicKeyHash, 
     RawBuffer, Receiver, SessionId, ton, utils
 };
@@ -173,11 +172,11 @@ pub fn public_key_hash_to_int256(v: &PublicKeyHash) -> UInt256 {
 }
 
 pub fn get_overlay_id(first_block: &ton_api::ton::catchain::FirstBlock) -> Result<SessionId> {
-    let serialized_first_block = serialize_tl_boxed_object!(first_block);
+    let serialized_first_block = crate::serialize_tl_boxed_object!(first_block);
     let overlay_id = ::ton_api::ton::pub_::publickey::Overlay {
         name: serialized_first_block.into(),
     };
-    let serialized_overlay_id = serialize_tl_boxed_object!(&overlay_id.into_boxed());
+    let serialized_overlay_id = crate::serialize_tl_boxed_object!(&overlay_id.into_boxed());
     Ok(UInt256::calc_file_hash(&serialized_overlay_id.0))
 }
 
