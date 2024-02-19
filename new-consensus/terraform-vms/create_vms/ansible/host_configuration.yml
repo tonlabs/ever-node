@@ -1,0 +1,10 @@
+---
+- hosts: smft_vm_validators
+  become: yes
+  become_user: root
+  become_method: sudo
+  tasks:
+    - name: "Configure host"
+      block:
+        - name: "Configure host"
+          include_tasks: tasks/host-cleaning/configure-host.yaml

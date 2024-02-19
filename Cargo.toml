@@ -66,9 +66,9 @@ ton_abi = { git = 'https://github.com/tonlabs/ever-abi.git', optional = true, ta
 ton_api = { git = 'https://github.com/tonlabs/ever-tl.git', package = 'ton_api', tag = '0.3.59' }
 ton_block = { git = 'https://github.com/tonlabs/ever-block.git', tag = '1.9.122' }
 ton_block_json = { git = 'https://github.com/tonlabs/ever-block-json.git', tag = '0.7.212' }
-ton_executor = { git = 'https://github.com/tonlabs/ever-executor.git', tag = '1.16.109' }
+ton_executor = { git = 'https://github.com/tonlabs/ever-executor.git', tag = '1.16.110' }
 ton_types = { git = 'https://github.com/tonlabs/ever-types.git', tag = '2.0.32' }
-ton_vm = { git = 'https://github.com/tonlabs/ever-vm.git', tag = '1.9.6' }
+ton_vm = { git = 'https://github.com/tonlabs/ever-vm.git', tag = '1.9.7' }
 validator_session = { path = 'validator-session' }
 
 [dev-dependencies]
