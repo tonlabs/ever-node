@@ -3,7 +3,6 @@ edition = '2018'
 name = 'storage'
 version = '0.5.0'
 
-
 [dependencies]
 ahash = '0.8'
 async-trait = '0.1.31'
@@ -36,11 +35,9 @@ ton_types = { git = 'https://github.com/tonlabs/ever-types.git', tag = '2.0.32' 
 [build-dependencies]
 cc = { features = [ 'parallel' ], version = '1.0.61' }
 
-
 [features]
 default = [  ]
 telemetry = [  ]
-
 
 [[bench]]
 harness = false

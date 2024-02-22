@@ -4,7 +4,6 @@ edition = '2021'
 name = 'validator_session'
 version = '0.0.2'
 
-
 [dependencies]
 backtrace = '0.3'
 crc = '3.0'
@@ -28,8 +27,6 @@ chrono = '0.4'
 colored = '1.9'
 env_logger = '0.7'
 
-
 [features]
 slashing = [  ]
-
 
