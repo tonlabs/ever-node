@@ -19,6 +19,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use log::warn;
 use ton_api::IntoBoxed;
+use ton_types::KeyOption;
 
 /*
     Constants
@@ -89,6 +90,23 @@ pub(crate) fn into_public_key_tl(opt: &Arc<dyn ton_types::KeyOption>) -> ton_typ
     let pub_key = opt.pub_key()?;
     use ton_api::ton::pub_::publickey::Bls;
     Ok(Bls {
-        bls_key: ton_api::ton::bytes(pub_key.to_vec())
+        bls_key: pub_key.to_vec()
     }.into_boxed())
+}
+
+pub(crate) fn generate_test_bls_key(public_key: &Arc<dyn KeyOption>) -> Result<Arc<dyn KeyOption>> {
+    use ton_types::BlsKeyOption;
+    use ton_types::BLS_KEY_MATERIAL_LEN;    
+
+    log::debug!(target: "verificator", "Generate BLS key from public validator's key {}", public_key.id());
+
+    let public_key_data = public_key.pub_key()?;
+    let mut ikm: [u8; BLS_KEY_MATERIAL_LEN] = [0; BLS_KEY_MATERIAL_LEN];
+    ikm.copy_from_slice(&public_key_data);
+
+    let bls_key = Arc::new(BlsKeyOption::from_key_material(&ikm)?);
+    
+    log::debug!(target: "verificator", "BLS key generation is done for public validator's key {}", public_key.id());
+
+    Ok(bls_key)
 }

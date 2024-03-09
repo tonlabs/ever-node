@@ -57,8 +57,8 @@ use ton_api::{
     }, IntoBoxed
 };
 use ton_block::{
-    MASTERCHAIN_ID, SHARD_FULL, GlobalCapabilities, OutMsgQueue,
-    BlockIdExt, AccountIdPrefixFull, ShardIdent, Message
+    AccountIdPrefixFull, BlockIdExt, CellsFactory, GlobalCapabilities, Message, OutMsgQueue,
+    ShardIdent, MASTERCHAIN_ID, SHARD_FULL
 };
 #[cfg(feature="workchains")]
 use ton_block::{BASE_WORKCHAIN_ID, INVALID_WORKCHAIN_ID};
@@ -428,6 +428,7 @@ impl EngineOperations for Engine {
         root_hash: &UInt256,
         master_id: &BlockIdExt,
         active_peers: &Arc<lockfree::set::Set<Arc<KeyId>>>,
+        bad_peers: &mut HashSet<Arc<KeyId>>,
         attempts: Option<usize>
     ) -> Result<Arc<ShardStateStuff>> {
 
@@ -447,6 +448,7 @@ impl EngineOperations for Engine {
             master_id,
             overlay.deref(),
             active_peers,
+            bad_peers,
             attempts,
             &|| {
                 if self.check_stop() {
@@ -745,7 +747,7 @@ impl EngineOperations for Engine {
 
     async fn download_next_key_blocks_ids(
         &self, 
-        block_id: &BlockIdExt, 
+        block_id: &BlockIdExt
     ) -> Result<Vec<BlockIdExt>> {
         let mc_overlay = self.get_masterchain_overlay().await?;
         mc_overlay.download_next_key_blocks_ids(block_id, 5).await
@@ -1010,7 +1012,7 @@ impl EngineOperations for Engine {
     }
 
     async fn push_message_to_remp(&self, data: ton_api::ton::bytes) -> Result<()> {
-        let (id, _message) = create_ext_message(&data.0)?;
+        let (id, _message) = create_ext_message(&data)?;
         let remp_message = ton_api::ton::ton_node::rempmessage::RempMessage {
             message: data,
             id: id.clone(),
@@ -1269,6 +1271,10 @@ impl EngineOperations for Engine {
             }
         }
         None
+    }
+
+    fn db_cells_factory(&self) -> Result<Arc<dyn CellsFactory>> {
+        self.db().cells_factory()
     }
 }
 

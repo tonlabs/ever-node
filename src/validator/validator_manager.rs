@@ -48,6 +48,7 @@ use std::{
     time::{Duration, SystemTime}
 };
 use crate::validator::verification::{VerificationFactory, VerificationListener, VerificationManagerPtr};
+use crate::validator::verification::GENERATE_MISSING_BLS_KEY;
 use crate::validator::BlockCandidate;
 use spin::mutex::SpinMutex;
 use tokio::time::timeout;
@@ -96,7 +97,7 @@ fn get_session_id(
         val_set,
         new_catchain_ids
     );
-    UInt256::calc_file_hash(&serialized.0)
+    UInt256::calc_file_hash(&serialized)
 }
 
 fn compute_session_unsafe_serialized(session_id: &UInt256, rotate_id: u32) -> Vec<u8> {
@@ -156,7 +157,7 @@ fn validator_session_options_serialize(
 
 fn get_validator_session_options_hash(opts: &validator_session::SessionOptions) -> (UInt256, catchain::RawBuffer) {
     let serialized = validator_session_options_serialize(opts);
-    (UInt256::calc_file_hash(&serialized.0), serialized)
+    (UInt256::calc_file_hash(&serialized), serialized)
 }
 
 fn get_session_options(opts: &ConsensusConfig) -> validator_session::SessionOptions {
@@ -611,7 +612,7 @@ impl ValidatorManagerImpl {
         log::debug!(
             target: "validator_manager",
             "SessionOptions from config.29 serialized: {} hash: {:x}",
-            hex::encode(session_options_serialized.0),
+            hex::encode(session_options_serialized),
             opts_hash
         );
         Ok((session_options, opts_hash))
@@ -1316,27 +1317,28 @@ impl ValidatorManagerImpl {
                 }
             }
         }
-
-        let mut precalc_split_queues_for: HashSet<BlockIdExt> = HashSet::new();
-        for (_, session) in &self.validator_sessions {
-            for id in &blocks_before_split {
-                if id.shard().is_parent_for(session.shard()) {
-                    log::trace!(target: "validator_manager", "precalc_split_queues_for {}", id);
-                    precalc_split_queues_for.insert(id.clone());
+        if !mc_state.config_params()?.has_capability(GlobalCapabilities::CapNoSplitOutQueue) {
+            let mut precalc_split_queues_for: HashSet<BlockIdExt> = HashSet::new();
+            for (_, session) in &self.validator_sessions {
+                for id in &blocks_before_split {
+                    if id.shard().is_parent_for(session.shard()) {
+                        log::trace!(target: "validator_manager", "precalc_split_queues_for {}", id);
+                        precalc_split_queues_for.insert(id.clone());
+                    }
                 }
             }
-        }
-
-        // start background tasks which will precalculate split out messages queues
-        for id in precalc_split_queues_for {
-            let engine = self.engine.clone();
-            tokio::spawn(async move {
-                log::trace!(target: "validator_manager", "Split queues precalculating for {}", id);
-                match OutMsgQueueInfoStuff::precalc_split_queues(&engine, &id).await {
-                    Ok(_) => log::trace!(target: "validator_manager", "Split queues precalculated for {}", id),
-                    Err(e) => log::error!(target: "validator_manager", "Can't precalculate split queues for {}: {}", id, e)
-                }
-            });
+            
+            // start background tasks which will precalculate split out messages queues
+            for id in precalc_split_queues_for {
+                let engine = self.engine.clone();
+                tokio::spawn(async move {
+                    log::trace!(target: "validator_manager", "Split queues precalculating for {}", id);
+                    match OutMsgQueueInfoStuff::precalc_split_queues(&engine, &id).await {
+                        Ok(_) => log::trace!(target: "validator_manager", "Split queues precalculated for {}", id),
+                        Err(e) => log::error!(target: "validator_manager", "Can't precalculate split queues for {}: {}", id, e)
+                    }
+                });
+            }
         }
 
         let verification_manager = self.verification_manager.lock().clone();
@@ -1353,8 +1355,14 @@ impl ValidatorManagerImpl {
                         let local_key = self.validator_list_status.get_local_key().expect("Validator must have local key");
                         let utime_since: u32 = self.validator_list_status.get_curr_utime_since().expect("Validator curr_utime_since must be set");
                         log::debug!(target: "verificator", "Request BLS key");
-                        let local_bls_key = self.engine.get_validator_bls_key(local_key.id()).await;
+                        let mut local_bls_key = self.engine.get_validator_bls_key(local_key.id()).await;
                         log::debug!(target: "verificator", "Request BLS key done");
+                        if local_bls_key.is_none() && GENERATE_MISSING_BLS_KEY {
+                            match VerificationFactory::generate_test_bls_key(&local_key) {
+                                Ok(bls_key) => local_bls_key = Some(bls_key),
+                                Err(err) => log::error!(target: "verificator", "Can't generate test BLS key: {:?}", err),
+                            }
+                        }
 
                         match local_bls_key {
                             Some(local_bls_key) => {

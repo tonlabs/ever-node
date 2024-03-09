@@ -199,17 +199,37 @@ impl Workchain {
             let adnl_id = get_adnl_id(&desc);
             //let adnl_id = desc.adnl_addr.clone().map_or("** no-addr **".to_string(), |x| x.to_hex_string());
             let public_key = sigpubkey_to_publickey(&desc.public_key);
+            let mut bls_public_key = desc.bls_public_key.clone();
 
-            log::debug!(target: "verificator", "...node {}#{}/{} for workchain {}: public_key={}, public_key_bls={}, adnl_id={}, weight={} ({:.2}%)",
-                if local_id == public_key.id() { ">" } else { " " },
-                i, wc_validators.len(), node_debug_id,
-                &hex::encode(&catchain::serialize_tl_boxed_object!(&utils::into_public_key_tl(&public_key).unwrap()).as_ref()),
-                Self::bls_key_to_string(&desc.bls_public_key),
-                adnl_id,
-                desc.weight,
-                desc.weight as f64 / wc_total_weight as f64 * 100.0);
+            if bls_public_key.is_none() && GENERATE_MISSING_BLS_KEY {
+                match utils::generate_test_bls_key(&public_key) {
+                    Ok(bls_key) => {
+                        match bls_key.pub_key() {
+                            Ok(bls_key) => {
+                                let bls_key_data: [u8; BLS_PUBLIC_KEY_LEN] = bls_key.to_vec().try_into().unwrap_or_else(|v: Vec<u8>| panic!("Expected a Vec of length {} but it was {}", BLS_PUBLIC_KEY_LEN, v.len()));
+                                bls_public_key = Some(bls_key_data);
+                            },
+                            Err(err) => log::error!(target: "verificator", "Can't generate test BLS key (can't extract pub key data): {:?}", err),
+                        }
+                    },
+                    Err(err) => log::error!(target: "verificator", "Can't generate test BLS key: {:?}", err),
+                }
+            }
 
-            wc_pub_keys.push(match desc.bls_public_key {
+            if log::log_enabled!(target: "verificator", log::Level::Debug) {
+                let serialized_pub_key_tl : ton_api::ton::bytes = catchain::serialize_tl_boxed_object!(&utils::into_public_key_tl(&public_key).unwrap());
+
+                log::debug!(target: "verificator", "...node {}#{}/{} for workchain {}: public_key={}, public_key_bls={}, adnl_id={}, weight={} ({:.2}%)",
+                    if local_id == public_key.id() { ">" } else { " " },
+                    i, wc_validators.len(), node_debug_id,
+                    &hex::encode(&serialized_pub_key_tl),
+                    Self::bls_key_to_string(&bls_public_key),
+                    adnl_id,
+                    desc.weight,
+                    desc.weight as f64 / wc_total_weight as f64 * 100.0);
+            }
+
+            wc_pub_keys.push(match bls_public_key {
                 Some(bls_public_key) => bls_public_key.clone().into(),
                 None => [0; BLS_PUBLIC_KEY_LEN],
             });
@@ -231,13 +251,17 @@ impl Workchain {
             //let adnl_id = desc.adnl_addr.clone().map_or("** no-addr **".to_string(), |x| x.to_hex_string());
             let public_key = sigpubkey_to_publickey(&desc.public_key);
 
-            log::debug!(target: "verificator", "...MC node {}#{}/{} for workchain {}: public_key={}, adnl_id={}, weight={} ({:.2}%)",
-                if local_id == public_key.id() { ">" } else { " " },
-                i, mc_validators.len(), node_debug_id,
-                &hex::encode(&catchain::serialize_tl_boxed_object!(&utils::into_public_key_tl(&public_key).unwrap()).as_ref()),
-                adnl_id,
-                desc.weight,
-                desc.weight as f64 / mc_total_weight as f64 * 100.0);
+            if log::log_enabled!(target: "verificator", log::Level::Debug) {
+                let serialized_pub_key_tl : ton_api::ton::bytes = catchain::serialize_tl_boxed_object!(&utils::into_public_key_tl(&public_key).unwrap());
+
+                log::debug!(target: "verificator", "...MC node {}#{}/{} for workchain {}: public_key={}, adnl_id={}, weight={} ({:.2}%)",
+                    if local_id == public_key.id() { ">" } else { " " },
+                    i, mc_validators.len(), node_debug_id,
+                    &hex::encode(&serialized_pub_key_tl),
+                    adnl_id,
+                    desc.weight,
+                    desc.weight as f64 / mc_total_weight as f64 * 100.0);
+            }
         }
 
         let workchain = Self {

@@ -70,7 +70,7 @@ impl Merge<PoolPtr<dyn BlockCandidateSignature>> for PoolPtr<dyn BlockCandidateS
 
         let left = self;
 
-        if left.get_signature().0 < right.get_signature().0 {
+        if left.get_signature() < right.get_signature() {
             left.clone()
         } else {
             right.clone()
@@ -132,7 +132,7 @@ impl std::cmp::PartialEq for dyn BlockCandidateSignature {
     fn eq(&self, other: &Self) -> bool {
         //compare addresses only because each vector is unique in cache system
 
-        (self as *const Self) == (other as *const Self)
+        std::ptr::addr_eq(self, other)
     }
 }
 
@@ -393,7 +393,7 @@ impl std::cmp::PartialEq for dyn BlockCandidate {
     fn eq(&self, other: &Self) -> bool {
         //compare addresses only because each vector is unique in cache system
 
-        (self as *const Self) == (other as *const Self)
+        std::ptr::addr_eq(self, other)
     }
 }
 

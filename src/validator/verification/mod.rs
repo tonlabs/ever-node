@@ -22,6 +22,8 @@ use std::sync::Weak;
 use ton_block::BlockIdExt;
 use ton_block::ValidatorDescr;
 use ton_types::UInt256;
+use ton_types::KeyOption;
+use ton_types::Result;
 use validator_session::PrivateKey;
 use catchain::profiling::InstanceCounter;
 
@@ -32,6 +34,8 @@ mod verification_manager;
 mod workchain;
 mod workchain_overlay;
 mod utils;
+
+pub const GENERATE_MISSING_BLS_KEY: bool = true; //generate missing BLS key from ED25519 public key (only for testing)
 
 /// Engine ptr
 type EnginePtr = Arc<dyn EngineOperations>;
@@ -86,5 +90,10 @@ impl VerificationFactory {
     /// Create new verification manager
     pub fn create_manager(engine: EnginePtr, runtime: tokio::runtime::Handle) -> VerificationManagerPtr {
         verification_manager::VerificationManagerImpl::create(engine, runtime)
+    }
+
+    /// Generate test BLS key based on public key
+    pub fn generate_test_bls_key(public_key: &Arc<dyn KeyOption>) -> Result<Arc<dyn KeyOption>> {
+        utils::generate_test_bls_key(public_key)
     }
 }

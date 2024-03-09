@@ -1,25 +1,24 @@
+#!/bin/bash
+
 NODES=6
 NODES=10
 WORKCHAINS=false
+REMP_TEST=false
 CURRENT_BRANCH="$(git branch --show-current)"
-
-if "$ROOT" == ""
-then
-    ROOT="./tmp"
-fi
+TEST_ROOT=$(pwd);
+NODE_TARGET=$TEST_ROOT/../../target/release/
 
 echo "Current branch: $CURRENT_BRANCH"
-echo "Current root: $ROOT"
+echo "Current root: $TEST_ROOT"
 
 # apt update
 # apt install jq
 
-if [ ! "$REMP_TEST" == "true" ]
+if [ "$REMP_TEST" == "true" ]
 then
-    echo "No Remp testing: '$REMP_TEST'"
-    REMP_TEST=false
-else
     echo "Remp testing in progress. Make sure you have enabled a REMP capability in a zerostate."
+else
+    echo "Remp testing is NOT enabled!"
 fi
 
 if [ "$WORKCHAINS" == "true" ]
@@ -31,7 +30,7 @@ fi
 
 echo "Preparations..."
 
-pkill -9 ton_node
+pkill -9 ton_node > /dev/null 2>&1 || echo "No ton_node processes"
 
 TEST_ROOT=$(pwd);
 NODE_TARGET=$TEST_ROOT/../../target/release/
@@ -40,32 +39,13 @@ NODE_TARGET=$TEST_ROOT/../../target/release/
 if true; then
 #if false; then
 
-./remove_junk.sh $NODE_TARGET $NODES > /dev/null 2>&1
+bash ./remove_junk.sh "$NODE_TARGET" "$NODES" > /dev/null 2>&1
 echo "Building $(pwd)"
 
 if ! cargo build --release --features workchains
 then
     exit 1
 fi
-
-cd ../../../
-if ! [ -d "ever-node-tools-private" ]
-then
-    git clone "https://github.com/tonlabs/ever-node-tools"
-    cd ever-node-tools-private
-    git checkout "$CURRENT_BRANCH" || echo "Use default branch"
-else
-    cd ever-node-tools-private
-fi
-TOOLS_ROOT=$(pwd)
-
-# cargo update
-echo "Building $(pwd)"
-if ! cargo build --release
-then
-    exit 1
-fi
-cd target/release/
 
 cd $TEST_ROOT
 NOWDATE=$(date +"%s")
@@ -83,8 +63,6 @@ cat $TEST_ROOT/ton-global.config_2.json >> $NODE_TARGET/ton-global.config.json
 
 mkdir tmp > /dev/null 2>&1
 rm -rd tmp/* > /dev/null 2>&1
-mkdir tmp/blocks/ > /dev/null 2>&1
-
 
 # 0 is full node
 for (( N=0; N <= $NODES; N++ ))
@@ -94,14 +72,11 @@ do
     echo "Cleaning up #$N..."
     rm -r -d node_db_$N > /dev/null 2>&1
     rm -r -d configs_$N > /dev/null 2>&1
-    rm $ROOT/output_$N.log > /dev/null 2>&1
-
+    rm $TEST_ROOT/tmp/output_$N.log > /dev/null 2>&1
 
     echo "Validator's #$N config generating..."
 
-    pkill -9 ton_node
-
-    $TOOLS_ROOT/target/release/keygen > $TEST_ROOT/tmp/genkey$N
+    ./keygen > $TEST_ROOT/tmp/genkey$N
     jq -c .public $TEST_ROOT/tmp/genkey$N > console_public_json
     rm config.json > /dev/null 2>&1
     rm default_config.json > /dev/null 2>&1
@@ -140,7 +115,7 @@ do
     cp $NODE_TARGET/default_config$N.json $TEST_ROOT/tmp/default_config$N.json
 
     rm tmp_output > /dev/null 2>&1
-    ./ton_node --configs . --ckey "$(cat console_public_json)" > tmp_output &
+    (./ton_node --configs . --ckey "$(cat console_public_json)" > tmp_output 2>&1 & wait 2>/dev/null) &
     echo "  waiting for 5 secs"
     sleep 5
     if [ ! -f "console_config.json" ]; then
@@ -148,9 +123,8 @@ do
         exit 1
     fi
 
-
     cp console_config.json $TEST_ROOT/tmp/console$N.json
-    cd $TOOLS_ROOT/target/release/
+    cd $NODE_TARGET
     jq ".client_key = $(jq .private $TEST_ROOT/tmp/genkey$N)" "$TEST_ROOT/tmp/console$N.json" > "$TEST_ROOT/tmp/console$N.tmp.json"
     jq ".config = $(cat $TEST_ROOT/tmp/console$N.tmp.json)" "$TEST_ROOT/console-template.json" > "$TEST_ROOT/tmp/console$N.json"
     rm $TEST_ROOT/tmp/console$N.tmp.json
@@ -194,7 +168,7 @@ do
     cp $NODE_TARGET/config.json $TEST_ROOT/tmp/config$N.json
 
     echo "Kill ton_node (expected)"
-    pkill -9 ton_node
+    pkill -9 ton_node > /dev/null 2>&1 || echo "No ton_node processes"
 
 done
 
@@ -228,16 +202,14 @@ done
 cat $TEST_ROOT/zero_state_blanc_2.json >> $TEST_ROOT/tmp/zero_state.json
 
 echo "  finish zerostate generating..."
+rm -f *.boc > /dev/null 2>&1
 ./zerostate -i $TEST_ROOT/tmp/zero_state.json
-rm $NODE_TARGET/*.boc > /dev/null 2>&1
-cp *.boc $NODE_TARGET
-rm *.boc > /dev/null 2>&1
 
 echo "Global config generating..."
 
 cd $TEST_ROOT
 cat ton-global.config_1.json >> tmp/ton-global.config.json
-cd $TOOLS_ROOT/target/release
+cd $NODE_TARGET
 
 #echo "TEMP check"
 #exit 0
@@ -260,7 +232,7 @@ do
 done
 
 cat $TEST_ROOT/ton-global.config_2.json >> $TEST_ROOT/tmp/ton-global.config.json
-jq ".validator.zero_state = $(jq .zero_state $TOOLS_ROOT/target/release/config.json)" "$TEST_ROOT/tmp/ton-global.config.json" > "$TEST_ROOT/tmp/ton-global.config.json.tmp"
+jq ".validator.zero_state = $(jq .zero_state $NODE_TARGET/config.json)" "$TEST_ROOT/tmp/ton-global.config.json" > "$TEST_ROOT/tmp/ton-global.config.json.tmp"
 # Looks like jq contains bug which converts big number wrong way, rolling back:
 sed "s/-9223372036854776000/-9223372036854775808/g" $TEST_ROOT/tmp/ton-global.config.json.tmp > $TEST_ROOT/tmp/ton-global.config.json
 cp $TEST_ROOT/tmp/ton-global.config.json $NODE_TARGET/ton-global.config.json
@@ -281,11 +253,11 @@ do
     cp $TEST_ROOT/tmp/config$N.json $NODE_TARGET/configs_$N/config.json
     cp $TEST_ROOT/tmp/default_config$N.json $NODE_TARGET/configs_$N/default_config.json
     cp $TEST_ROOT/tmp/console$N.json $NODE_TARGET/configs_$N/console.json
-    sed "s/NODE_NUM/$N/g" $TEST_ROOT/log_cfg.yml > $NODE_TARGET/configs_$N/log_cfg_$N.yml
+    sed "s/NODE_NUM/$N/g ; s#/shared/#$TEST_ROOT/tmp/#" "$TEST_ROOT/log_cfg.yml" > "$NODE_TARGET/configs_$N/log_cfg_$N.yml"
     cp $TEST_ROOT/tmp/ton-global.config.json $NODE_TARGET/configs_$N/ton-global.config.json
 
-    # rm $ROOT/output_$N.log
-    ./ton_node --configs configs_$N -z . > "$ROOT/node_$N.output" 2>&1 &
+    # rm $TEST_ROOT/tmp/output_$N.log
+    ./ton_node --configs configs_$N -z . > "$TEST_ROOT/tmp/output_$N.log" 2>&1 &
 
 done
 
@@ -304,7 +276,7 @@ exit 0
 # function find_block {
 #     for (( N=1; N <= $NODES; N++ ))
 #     do
-#         if cat "$ROOT/output_$N.log" | egrep -q "Applied(.*)$1"
+#         if cat "$TEST_ROOT/tmp/output_$N.log" | egrep -q "Applied(.*)$1"
 #         then
 #             echo "Applied block ($1) - FOUND on node #$N!"
 #         else
@@ -333,10 +305,7 @@ exit 0
 #     fi
 # fi
 
-# # pkill ton_node
-
-
-# echo "TEST PASSED"
+# pkill -9 ton_node
 
 echo "TEST PASSED"
 

@@ -99,3 +99,6 @@ loggers:
 
   ext_messages:
     level: trace
+
+  verification:
+    level: debug

@@ -495,7 +495,7 @@ impl CatchainOverlayListener for WorkchainListener {
 
         if let Some(listener) = self.listener.upgrade() {
             self.runtime_handle.spawn(async move {
-                match ton_api::Deserializer::new(&mut &data.data().0[..]).read_boxed::<ton_api::ton::TLObject>() {
+                match ton_api::Deserializer::new(&mut &data.data()[..]).read_boxed::<ton_api::ton::TLObject>() {
                     Ok(broadcast) => {
                         let broadcast = match broadcast.downcast::<Broadcast>() {
                             Ok(broadcast) => {
@@ -583,7 +583,7 @@ impl WorkchainListener {
     ) -> Result<BlockPtr> {
         check_execution_time!(50_000);
 
-        match ton_api::Deserializer::new(&mut &data.data().0[..]).read_boxed::<ton_api::ton::TLObject>() {
+        match ton_api::Deserializer::new(&mut &data.data()[..]).read_boxed::<ton_api::ton::TLObject>() {
             Ok(message) => {
                 use ton_api::ton::ton_node::BlockCandidateStatus;
 
