@@ -97,7 +97,7 @@ lockfree = { git = 'https://github.com/tonlabs/lockfree.git' }
 overlay = { git = 'https://github.com/tonlabs/ever-overlay.git', tag = '0.7.28' }
 rldp = { git = 'https://github.com/tonlabs/ever-rldp.git', tag = '0.8.22' }
 storage = { path = 'storage' }
-ton_abi = { git = 'https://github.com/tonlabs/ever-abi.git', optional = true, tag = '2.4.16' }
+ton_abi = { git = 'https://github.com/tonlabs/ever-abi.git', tag = '2.4.16' }
 ton_api = { git = 'https://github.com/tonlabs/ever-tl.git', package = 'ton_api', tag = '0.3.62' }
 ton_block = { git = 'https://github.com/tonlabs/ever-block.git', tag = '1.9.126' }
 ton_block_json = { git = 'https://github.com/tonlabs/ever-block-json.git', tag = '0.7.215' }
@@ -122,7 +122,7 @@ gosh = [ 'ton_block/gosh', 'ton_vm/gosh' ]
 log_metrics = [  ]
 prometheus = [ 'metrics-exporter-prometheus', 'log_metrics' ]
 signature_with_id = [ 'ton_block/signature_with_id', 'ton_vm/signature_with_id', 'ton_executor/signature_with_id' ]
-slashing = [ 'ton_abi', 'validator_session/slashing' ]
+slashing = [ 'validator_session/slashing' ]
 statsd = [ 'metrics-exporter-statsd', 'log_metrics', 'dep:statsd' ]
 telemetry = [ 'adnl/telemetry', 'dht/telemetry', 'rldp/telemetry', 'overlay/telemetry', 'storage/telemetry' ]
 trace_alloc = [  ]
