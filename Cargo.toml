@@ -139,3 +139,5 @@ features = [ 'cmake_build' ]
 optional = true
 version = '0.26.0'
 
+[patch.'https://github.com/tonlabs/ever-types.git']
+ton_types = { branch = 'feature/bls_generate_based_on_key_material', git = 'https://github.com:443//tonlabs/ever-types.git' }
