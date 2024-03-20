@@ -34,7 +34,6 @@ use std::time::Duration;
 use spin::mutex::SpinMutex;
 use ton_api::ton::ton_node::blockcandidatestatus::BlockCandidateStatus;
 use ton_api::ton::ton_node::broadcast::BlockCandidateBroadcast;
-use ton_api::IntoBoxed;
 use ton_types::Result;
 use validator_session::ValidatorWeight;
 use catchain::utils::MetricsDumper;
@@ -42,7 +41,6 @@ use catchain::utils::MetricsHandle;
 use metrics::Recorder;
 use catchain::utils::add_compute_relative_metric;
 use catchain::utils::add_compute_result_metric;
-use catchain::serialize_tl_boxed_object;
 use ton_types::bls::BLS_PUBLIC_KEY_LEN;
 
 //TODO: cutoff weight configuration
@@ -59,6 +57,7 @@ const BLOCK_SYNC_MAX_PERIOD_MS: u64 = 400; //max time for block sync
 const NEIGHBOURS_SYNC_MIN_PERIOD_MS: u64 = 1500; //min time for sync with neighbour nodes
 const NEIGHBOURS_SYNC_MAX_PERIOD_MS: u64 = 2000; //max time for sync with neighbour nodes
 const BLOCK_LIFETIME_PERIOD: Duration = Duration::from_secs(600); //block's lifetime
+const VERIFICATION_OBLIGATION_CUTOFF: f64 = 1.0; //cutoff for validator obligation to verify [0..1]
 
 /*
 ===============================================================================
@@ -98,12 +97,17 @@ pub struct Workchain {
     new_block_candidate_counter: metrics::Counter,     //counter for new block candidates
     send_block_status_to_mc_counter: metrics::Counter, //counter of sendings block status to MC
     send_block_status_counter: metrics::Counter,       //counter of sendings block status within workchain
+    external_request_counter: metrics::Counter,        //counter of external requests for a block
+    external_request_delivered_blocks_counter: metrics::Counter, //counter of external requests for delivered blocks
+    external_request_approved_blocks_counter: metrics::Counter,  //counter of external requests for approved block
+    external_request_rejected_blocks_counter: metrics::Counter,  //counter of external requests for rejected blocks
     verify_block_counter: ResultStatusCounter,                       //counter for block verifications
     block_status_received_in_mc_counter: ResultStatusCounter,        //counter for block receivings in MC
     block_status_send_to_mc_latency_histogram: metrics::Histogram, //histogram for block candidate sending to MC
     block_status_received_in_mc_latency_histogram: metrics::Histogram, //histogram for block candidate receiving in MC
     candidate_delivered_to_wc_latency_histogram: metrics::Histogram, //histogram for block candidate receiving in WC
     block_status_merges_count_histogram: metrics::Histogram, //histogram for block candidate merges count (hops count)
+    block_external_request_delays_histogram: metrics::Histogram, //histogram for block external request delays
 }
 
 impl Workchain {
@@ -293,12 +297,17 @@ impl Workchain {
             new_block_candidate_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_new_block_candidates", workchain_id).into()),
             send_block_status_to_mc_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_block_status_to_mc_sends", workchain_id).into()),
             send_block_status_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_block_status_within_wc_sends", workchain_id).into()),
+            external_request_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_ext_requests", workchain_id).into()),
+            external_request_delivered_blocks_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_ext_requests_delivered_blocks", workchain_id).into()),
+            external_request_approved_blocks_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_ext_requests_approved_blocks", workchain_id).into()),
+            external_request_rejected_blocks_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_ext_requests_rejected_blocks", workchain_id).into()),
             block_status_received_in_mc_counter: ResultStatusCounter::new(&metrics_receiver, &format!("verificator_wc{}_block_status_received_in_mc", workchain_id)),
             verify_block_counter: ResultStatusCounter::new(&metrics_receiver, &format!("verificator_wc{}_block_candidate_verifications", workchain_id)),
             candidate_delivered_to_wc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:verificator_wc{}_stage1_block_candidate_delivered_in_wc", workchain_id).into()),
             block_status_send_to_mc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:verificator_wc{}_stage2_block_status_send_to_mc_latency", workchain_id).into()),
             block_status_received_in_mc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:verificator_wc{}_stage3_block_status_received_in_mc_latency", workchain_id).into()),
             block_status_merges_count_histogram: metrics_receiver.sink().register_histogram(&format!("verificator_wc{}_block_status_merges_count", workchain_id).into()),
+            block_external_request_delays_histogram: metrics_receiver.sink().register_histogram(&format!("verificator_wc{}_block_ext_request_delay", workchain_id).into()),
         };
         let workchain = Arc::new(workchain);
 
@@ -404,6 +413,32 @@ impl Workchain {
             &format!("verificator_wc{}_mc_sends_per_block_candidate", workchain_id),
             &format!("verificator_wc{}_block_status_to_mc_sends", workchain_id),
             &format!("verificator_wc{}_new_block_candidates", workchain_id),
+            0.0,
+        );
+
+        use catchain::utils::add_compute_percentage_metric;
+
+        add_compute_percentage_metric(
+            metrics_dumper,
+            &format!("verificator_wc{}_ext_requests_delivery.frequency", workchain_id),
+            &format!("verificator_wc{}_ext_requests_delivered_blocks", workchain_id),
+            &format!("verificator_wc{}_ext_requests", workchain_id),
+            0.0,
+        );
+
+        add_compute_percentage_metric(
+            metrics_dumper,
+            &format!("verificator_wc{}_ext_requests_rejected.frequency", workchain_id),
+            &format!("verificator_wc{}_ext_requests_rejected_blocks", workchain_id),
+            &format!("verificator_wc{}_ext_requests", workchain_id),
+            0.0,
+        );
+
+        add_compute_percentage_metric(
+            metrics_dumper,
+            &format!("verificator_wc{}_ext_requests_approved.frequency", workchain_id),
+            &format!("verificator_wc{}_ext_requests_approved_blocks", workchain_id),
+            &format!("verificator_wc{}_ext_requests", workchain_id),
             0.0,
         );
 
@@ -759,35 +794,90 @@ impl Workchain {
         }
     }
 
+    /// Update block delivery metrics
+    pub fn update_block_external_delivery_metrics(
+        &self,
+        candidate_id: &UInt256,
+        external_request_time: &std::time::SystemTime) {
+        let block = self.add_block_impl(candidate_id, None);
+
+        self.update_block_external_delivery_metrics_impl(&block, Some(external_request_time.clone()), None);
+    }
+
+    fn update_block_external_delivery_metrics_impl(
+        &self,
+        block: &BlockPtr,
+        external_request_time: Option<std::time::SystemTime>,
+        delivery_state_change_time: Option<std::time::SystemTime>,
+    ) {
+        let (should_update_delivery_metrics, is_first_time_external_request, has_approves, is_rejected, latency) = {
+            let mut block = block.lock();
+
+            let is_first_time_external_request = block.get_first_external_request_time().is_none() && external_request_time.is_some();
+            if let Some(external_request_time) = external_request_time {
+                block.set_first_external_request_time(&external_request_time);
+            }
+
+            let is_delivery_state_changed = block.get_delivery_state_change_time().is_none() && delivery_state_change_time.is_some();
+            if let Some(delivery_state_change_time) = delivery_state_change_time {
+                block.set_delivery_state_change_time(&delivery_state_change_time);
+            }
+
+            let latency = if let Some(external_request_time) = external_request_time {
+                if let Some(delivery_state_change_time) = delivery_state_change_time {
+                    if let Ok(latency) = delivery_state_change_time.duration_since(external_request_time) {
+                        Some(latency.as_millis())
+                    } else {
+                        Some(0) //default case - no latency
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            let should_update_delivery_metrics =  block.get_first_external_request_time().is_some() && block.get_delivery_state_change_time().is_some() &&
+                (is_first_time_external_request || is_delivery_state_changed);
+
+            (should_update_delivery_metrics, is_first_time_external_request, block.has_approves(), block.is_rejected(), latency)
+        };
+
+        if is_first_time_external_request {
+            self.external_request_counter.increment(1);
+        }
+
+        if !should_update_delivery_metrics {
+            return;
+        }
+
+        self.external_request_delivered_blocks_counter.increment(1);
+
+        if is_rejected {
+            self.external_request_rejected_blocks_counter.increment(1);
+        }
+
+        if has_approves {
+            self.external_request_approved_blocks_counter.increment(1);
+        }
+
+        if let Some(latency) = latency {
+            self.block_external_request_delays_histogram.record(latency as f64);
+        }
+    }
+
     /*
         Broadcast delivery protection methods
     */
 
     /// Get candidate ID
     fn get_candidate_id(candidate: &BlockCandidateBroadcast) -> UInt256 {
-        Self::get_candidate_id_impl(
-            &candidate.id,
-            &candidate.collated_data_file_hash,
-            &candidate.created_by,
-        )
+        Self::get_candidate_id_impl(&candidate.id)
     }
 
     /// Get candidate ID
-    pub fn get_candidate_id_impl(
-        id: &BlockIdExt,
-        collated_data_file_hash: &UInt256,
-        created_by: &UInt256,
-    ) -> UInt256 {
-        let candidate_id = ::ton_api::ton::validator_session::candidateid::CandidateId {
-            src: created_by.clone().into(),
-            root_hash: id.root_hash.clone().into(),
-            file_hash: id.file_hash.clone().into(),
-            collated_data_file_hash: collated_data_file_hash.clone().into(),
-        }
-        .into_boxed();
-        let serialized_candidate_id = serialize_tl_boxed_object!(&candidate_id);
-
-        catchain::utils::get_hash(&serialized_candidate_id)
+    pub fn get_candidate_id_impl(id: &BlockIdExt) -> UInt256 {
+        id.root_hash.clone()
     }
 
     /// Process new block candidate broadcast
@@ -912,6 +1002,8 @@ impl Workchain {
                     self.block_status_send_to_mc_latency_histogram.record(latency.as_millis() as f64);
                 }
 
+                self.update_block_external_delivery_metrics_impl(&block, None, Some(std::time::SystemTime::now()));
+
                 if should_send_to_mc {
                     //prevent double sending of block because of new delivery signatures
                     //do not mark block as delivered for ACK/NACK signals (because they can appear earlier than cutoff weight for delivery BLS)
@@ -952,8 +1044,39 @@ impl Workchain {
         Verification management
     */
 
+    fn should_verify(&self, candidate_id: &UInt256) -> bool {
+        if let Ok(local_bls_key) = self.local_bls_key.export_key() {
+            let mut local_key_payload : Vec<u8> = local_bls_key.into();
+            let mut payload : Vec<u8> = candidate_id.as_array().into();
+            
+            payload.append(&mut local_key_payload);
+
+            let payload_ptr = unsafe { std::slice::from_raw_parts(payload.as_ptr() as *const u8, payload.len()) };
+            let hash = crc32c::crc32c(payload_ptr);
+
+            if self.wc_validators.len () < 1 {
+                return false; //no verification in empty workchain
+            }
+            let random_value = (((hash as usize) % self.wc_validators.len()) as f64) / (self.wc_validators.len() as f64);
+            let result = random_value < VERIFICATION_OBLIGATION_CUTOFF;
+
+            trace!(target: "verificator", "Verification obligation for block candidate {} is {:.3} < {:.3} -> {} (node={})", candidate_id, random_value, VERIFICATION_OBLIGATION_CUTOFF, result, self.node_debug_id);
+    
+            return result;
+        }
+
+        log::warn!(target: "verificator", "Can't export BLS secret key (node={})", self.node_debug_id);
+        
+        false //can't verify without secret BLS key
+    }
+
     fn verify_block(&self, candidate_id: &UInt256, block_candidate: Arc<BlockCandidateBody>) {
         trace!(target: "verificator", "Verifying block candidate {} (node={})", candidate_id, self.node_debug_id);
+
+        if !self.should_verify(candidate_id) {
+            trace!(target: "verificator", "Skipping verification of block candidate {} (node={})", candidate_id, self.node_debug_id);
+            return;
+        }
 
         self.verify_block_counter.total_increment();
 

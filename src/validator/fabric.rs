@@ -18,6 +18,7 @@ use std::{
 use super::validator_utils::{validator_query_candidate_to_validator_block_candidate, pairvec_to_cryptopair_vec, get_first_block_seqno_after_prevs};
 use crate::{
     collator_test_bundle::CollatorTestBundle, engine_traits::EngineOperations, 
+    validator::verification::VerificationManagerPtr,
     validator::{CollatorSettings, validate_query::ValidateQuery, collator}, validating_utils::{fmt_next_block_descr_from_next_seqno, fmt_next_block_descr}
 };
 use ton_block::{BlockIdExt, ShardIdent, ValidatorSet, Deserializable};
@@ -60,7 +61,8 @@ pub async fn run_validate_query_any_candidate(
             block,
             validator_set,
             engine,
-            SystemTime::now()
+            SystemTime::now(),
+            None, //no verification manager for validations within verification
         ).await
     } else {
         Err(failure::format_err!("MC state is None"))
@@ -76,6 +78,7 @@ pub async fn run_validate_query(
     set: ValidatorSet,
     engine: Arc<dyn EngineOperations>,
     _timeout: SystemTime,
+    verification_manager: Option<VerificationManagerPtr>,
 ) -> Result<SystemTime> {
 
     let next_block_descr = fmt_next_block_descr(&block.block_id);
@@ -105,6 +108,7 @@ pub async fn run_validate_query(
             engine.clone(),
             false,
             true,
+            verification_manager,
         ).try_validate().await
     } else {
         let query = ValidateQuery::new(
@@ -116,6 +120,7 @@ pub async fn run_validate_query(
             engine.clone(),
             false,
             true,
+            verification_manager,
         );
         let validator_result = query.try_validate().await;
         if let Err(err) = &validator_result {

@@ -375,7 +375,6 @@ impl ValidatorManagerImpl {
     /// Create/destroy verification manager
     fn update_verification_manager_usage(&self, mc_state_extra: &McStateExtra) {
         let smft_enabled = crate::validator::validator_utils::is_smft_enabled(self.engine.clone(), mc_state_extra.config());
-        let smft_enabled = true;
         let verification_manager = self.verification_manager.lock().clone();
         let has_verification_manager = verification_manager.is_some();
 

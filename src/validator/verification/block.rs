@@ -76,12 +76,14 @@ pub struct Block {
     signatures_hash: u32,                             //hash for signatures
     created_timestamp: Option<i64>,                   //time of block creation
     first_appearance_time: std::time::SystemTime,     //time of first block appearance in a network
+    delivery_state_change_time: Option<std::time::SystemTime>, //time when block is delivered
     merges_count: u32,                                //merges count
     initially_mc_processed: bool,                     //was this block process in MC
     mc_originated: bool,                              //was this block appeared from MC
     mc_delivered: bool,                               //was this block delivered to MC because of cutoff weight of delivery signatures
     ready_for_send: bool,                             //is this block ready for sending
     _instance_counter: InstanceCounter,               //instance counter
+    first_external_request_time: Option<std::time::SystemTime>, //time of first external request
 }
 
 pub type BlockPtr = Arc<SpinMutex<Block>>;
@@ -112,6 +114,11 @@ impl Block {
     /// Is block rejected
     pub fn is_rejected(&self) -> bool {
         !self.rejections_signature.empty()
+    }
+
+    /// Does block have approves
+    pub fn has_approves(&self) -> bool {
+        !self.approvals_signature.empty()
     }
 
     /// Block first appearance time
@@ -152,6 +159,38 @@ impl Block {
                 }
             }
         }
+    }
+
+    /// Get first external request time
+    pub fn get_first_external_request_time(&self) -> &Option<std::time::SystemTime> {
+        &self.first_external_request_time
+    }
+
+    /// Set first external request time
+    pub fn set_first_external_request_time(&mut self, request_time: &std::time::SystemTime) {
+        if let Some(first_external_request_time) = self.first_external_request_time {
+            if first_external_request_time < *request_time {
+                return;
+            }
+        }
+
+        self.first_external_request_time = Some(*request_time);
+    }
+
+    /// Get time when block becomes delivered
+    pub fn get_delivery_state_change_time(&self) -> &Option<std::time::SystemTime> {
+        &self.delivery_state_change_time
+    }
+
+    /// Set delivery state change time
+    pub fn set_delivery_state_change_time(&mut self, time: &std::time::SystemTime) {
+        if let Some(delivery_state_change_time) = self.delivery_state_change_time {
+            if delivery_state_change_time < *time {
+                return;
+            }
+        }
+
+        self.delivery_state_change_time = Some(*time);
     }
 
     /// Set MC processed status
@@ -367,6 +406,8 @@ impl Block {
             ready_for_send: false,
             first_appearance_time: std::time::SystemTime::now(),
             _instance_counter: instance_counter.clone(),
+            first_external_request_time: None,
+            delivery_state_change_time: None,
         };
 
         body.update_hash();

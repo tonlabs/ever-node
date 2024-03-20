@@ -63,9 +63,14 @@ pub trait VerificationManager: Sync + Send {
     fn get_block_status(
         &self,
         block_id: &BlockIdExt,
-        collated_data_file_hash: &UInt256,
-        created_by: &UInt256,
     ) -> (bool, bool);
+
+    /// Wait for block verification
+    fn wait_for_block_verification(
+        &self,
+        block_id: &BlockIdExt,
+        timeout: &std::time::Duration,
+    ) -> bool;
 
     /// Update workchains
     async fn update_workchains<'a>(

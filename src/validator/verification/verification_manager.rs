@@ -30,6 +30,7 @@ use catchain::utils::MetricsHandle;
 use metrics::Recorder;
 use catchain::utils::compute_instance_counter;
 use catchain::check_execution_time;
+use catchain::utils::get_elapsed_time;
 
 /*
     Constants
@@ -118,8 +119,6 @@ impl VerificationManager for VerificationManagerImpl {
     fn get_block_status(
         &self,
         block_id: &BlockIdExt,
-        collated_data_file_hash: &UInt256,
-        created_by: &UInt256,
     ) -> (bool, bool) {
         let workchain_id = block_id.shard_id.workchain_id();
         let workchain = match self.workchains.lock().get(&workchain_id) {
@@ -129,7 +128,7 @@ impl VerificationManager for VerificationManagerImpl {
 
         if let Some(workchain) = workchain {
             let candidate_id =
-                Workchain::get_candidate_id_impl(block_id, collated_data_file_hash, created_by);
+                Workchain::get_candidate_id_impl(block_id);
 
             if let Some(block) = workchain.get_block_by_id(&candidate_id) {
                 return workchain.get_block_status(&block);
@@ -138,6 +137,60 @@ impl VerificationManager for VerificationManagerImpl {
 
         (false, false)
     }
+
+    /// Wait for block verification
+    fn wait_for_block_verification(
+        &self,
+        block_id: &BlockIdExt,
+        timeout: &std::time::Duration,
+    ) -> bool {
+        log::trace!(target: "verificator", "Start block {} verification", block_id);
+
+        let workchain_id = block_id.shard_id.workchain_id();
+        let workchain = match self.workchains.lock().get(&workchain_id) {
+            Some(workchain) => Some(workchain.clone()),
+            None => None,
+        };
+
+        if let Some(workchain) = workchain {
+            let candidate_id = Workchain::get_candidate_id_impl(block_id);
+            let start_time = SystemTime::now();
+
+            loop {
+                  //check for timeout
+
+                let elapsed_time = get_elapsed_time(&start_time);
+                if elapsed_time > *timeout {
+                    log::warn!(target: "verificator", "Finish block {} verification - timeout {}ms expired", block_id, elapsed_time.as_millis());
+                    workchain.update_block_external_delivery_metrics(&candidate_id, &start_time);
+                    return false;
+                }
+
+                  //check block status
+
+                if let Some(block) = workchain.get_block_by_id(&candidate_id) {
+                    let (delivered, rejected) = workchain.get_block_status(&block);
+
+                    workchain.update_block_external_delivery_metrics(&candidate_id, &start_time);
+
+                    if rejected {
+                        log::warn!(target: "verificator", "Finish block {} verification - NACK detected", block_id);
+                        //TODO: initiate arbitrage & wait for result instead of returning false
+                        return false;
+                    }
+
+                    if delivered && !rejected {
+                        log::trace!(target: "verificator", "Finish block {} verification - DELIVERED", block_id);
+                        return true;
+                    }
+                }
+            }
+        }
+
+        log::warn!(target: "verificator", "Finish block {} verification - no workchain found", block_id);
+
+        false
+    }    
 
     /*
         Workchains management
@@ -347,6 +400,10 @@ impl VerificationManagerImpl {
 
                 metrics_dumper.dump(|string| {
                     debug!(target: "verificator", "{}", string);
+                });
+
+                metrics_dumper.enumerate_as_f64(|key, value| {
+                    metrics::gauge!(key, value);
                 });
 
                 let current_workchains = workchains.lock().clone();

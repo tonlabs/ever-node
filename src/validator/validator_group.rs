@@ -849,6 +849,7 @@ impl ValidatorGroup {
                         self.validator_set.clone(),
                         self.engine.clone(),
                         SystemTime::now() + Duration::new(10, 0),
+                        self.verification_manager.clone(),
                     ).await
                 }
                 None => Err(failure::err_msg("Min masterchain block id missing")),
