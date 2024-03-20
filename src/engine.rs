@@ -67,8 +67,8 @@ use crate::{
 
 #[cfg(feature = "telemetry")]
 use adnl::telemetry::{Metric, MetricBuilder, TelemetryItem, TelemetryPrinter};
+use adnl::QueriesConsumer;
 use catchain::SessionId;
-use overlay::QueriesConsumer;
 use std::{
     ops::Deref, sync::{Arc, atomic::{AtomicBool, AtomicU8, AtomicU32, Ordering, AtomicU64}},
     time::{Duration, SystemTime}, collections::{HashMap, HashSet}, path::Path
@@ -964,7 +964,7 @@ impl Engine {
         self.overlay_operations.clone().add_overlay(id, !foreign).await
     }
 
-    pub fn calc_overlay_id(&self, workchain: i32, shard: u64) -> Result<(Arc<overlay::OverlayShortId>, overlay::OverlayId)> {
+    pub fn calc_overlay_id(&self, workchain: i32, shard: u64) -> Result<(Arc<adnl::OverlayShortId>, adnl::OverlayId)> {
         self.overlay_operations.calc_overlay_id(workchain, shard)
     }
 

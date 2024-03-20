@@ -788,7 +788,7 @@ impl ControlClient {
 
         /////////---------*/
         log::trace!("message body {}", body);
-        let data = ton_types::write_boc(&body)?;
+        let data = write_boc(&body)?;
         let path = params.next().map(
             |path| path.to_string()).unwrap_or("validator-query.boc".to_string()
         );

@@ -2,9 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## Version 0.56.2
+
+- Supported new multi-networks API of DHT
+
+## Version 0.56.1
+
+- Fix unstable sync (key blocks mismatch)
+
 ## Version 0.56.0
 
 - Get rid of ton::bytes type
+
+## Version 0.55.100
+
+- Deleted messages from outbound queue which were left after split are taken into estimation of block size
 
 ## Version 0.55.99
 

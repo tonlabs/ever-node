@@ -31,7 +31,7 @@ use catchain::profiling::ResultStatusCounter;
 use catchain::profiling::InstanceCounter;
 use catchain::check_execution_time;
 use log::*;
-use overlay::OverlayShortId;
+use adnl::OverlayShortId;
 use rand::Rng;
 use spin::mutex::SpinMutex;
 use std::time::Duration;

@@ -43,10 +43,10 @@ use crate::{
 #[cfg(feature = "external_db")]
 use crate::internal_db::EXTERNAL_DB_BLOCK;
 
+use adnl::{BroadcastSendInfo, PrivateOverlayShortId};
 use catchain::{
     CatchainNode, CatchainOverlay, CatchainOverlayListenerPtr, CatchainOverlayLogReplayListenerPtr
 };
-use overlay::{BroadcastSendInfo, PrivateOverlayShortId};
 use std::{collections::HashSet, ops::Deref, sync::Arc};
 use storage::block_handle_db::BlockHandle;
 use ton_api::{
@@ -122,7 +122,7 @@ impl EngineOperations for Engine {
         self.get_sync_status()
     }
 
-    fn calc_overlay_id(&self, workchain: i32, shard: u64) -> Result<(Arc<overlay::OverlayShortId>, overlay::OverlayId)> {
+    fn calc_overlay_id(&self, workchain: i32, shard: u64) -> Result<(Arc<adnl::OverlayShortId>, adnl::OverlayId)> {
         self.calc_overlay_id(workchain, shard)
     }
 
