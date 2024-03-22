@@ -157,15 +157,6 @@ impl VerificationManager for VerificationManagerImpl {
             let start_time = SystemTime::now();
 
             loop {
-                  //check for timeout
-
-                let elapsed_time = get_elapsed_time(&start_time);
-                if elapsed_time > *timeout {
-                    log::warn!(target: "verificator", "Finish block {} verification - timeout {}ms expired", block_id, elapsed_time.as_millis());
-                    workchain.update_block_external_delivery_metrics(&candidate_id, &start_time);
-                    return false;
-                }
-
                   //check block status
 
                 if let Some(block) = workchain.get_block_by_id(&candidate_id) {
@@ -183,6 +174,15 @@ impl VerificationManager for VerificationManagerImpl {
                         log::trace!(target: "verificator", "Finish block {} verification - DELIVERED", block_id);
                         return true;
                     }
+                }
+
+                  //check for timeout
+
+                let elapsed_time = get_elapsed_time(&start_time);
+                if elapsed_time > *timeout {
+                    log::warn!(target: "verificator", "Finish block {} verification - timeout {}ms expired", block_id, elapsed_time.as_millis());
+                    workchain.update_block_external_delivery_metrics(&candidate_id, &start_time);
+                    return false;
                 }
             }
         }
@@ -366,13 +366,13 @@ impl VerificationManagerImpl {
             let mut metrics_dumper = MetricsDumper::new();
             let mut workchain_metrics_dumpers: HashMap<i32, (MetricsDumper, i32)> = HashMap::new();
 
-            metrics_dumper.add_compute_handler("verificator_block".to_string(), &compute_instance_counter);
-            metrics_dumper.add_compute_handler("verificator_workchains".to_string(), &compute_instance_counter);
-            metrics_dumper.add_compute_handler("verificator_wc_overlays".to_string(), &compute_instance_counter);
-            metrics_dumper.add_compute_handler("verificator_mc_overlays".to_string(), &compute_instance_counter);
+            metrics_dumper.add_compute_handler("smft_block".to_string(), &compute_instance_counter);
+            metrics_dumper.add_compute_handler("smft_workchains".to_string(), &compute_instance_counter);
+            metrics_dumper.add_compute_handler("smft_wc_overlays".to_string(), &compute_instance_counter);
+            metrics_dumper.add_compute_handler("smft_mc_overlays".to_string(), &compute_instance_counter);
 
-            metrics_dumper.add_derivative_metric("verificator_block".to_string());
-            metrics_dumper.add_derivative_metric("verificator_workchains".to_string());
+            metrics_dumper.add_derivative_metric("smft_block".to_string());
+            metrics_dumper.add_derivative_metric("smft_workchains".to_string());
 
             let mut next_metrics_dump_time = SystemTime::now();
             let mut loop_idx = 0;
@@ -403,7 +403,7 @@ impl VerificationManagerImpl {
                 });
 
                 metrics_dumper.enumerate_as_f64(|key, value| {
-                    metrics::gauge!(key, value);
+                    metrics::gauge!(key.replace(".", "_"), value);
                 });
 
                 let current_workchains = workchains.lock().clone();
@@ -486,12 +486,12 @@ impl VerificationManagerImpl {
             runtime,
             workchains: workchains.clone(),
             metrics_receiver: metrics_receiver.clone(),
-            send_new_block_candidate_counter: metrics_receiver.sink().register_counter(&"verificator_candidates".into()),
-            update_workchains_counter: metrics_receiver.sink().register_counter(&"verificator_workchains_updates".into()),
-            blocks_instance_counter: Arc::new(InstanceCounter::new(&metrics_receiver, &"verificator_block".to_string())),
-            workchains_instance_counter: Arc::new(InstanceCounter::new(&metrics_receiver, &"verificator_workchains".to_string())),
-            wc_overlays_instance_counter: Arc::new(InstanceCounter::new(&metrics_receiver, &"verificator_wc_overlays".to_string())),
-            mc_overlays_instance_counter: Arc::new(InstanceCounter::new(&metrics_receiver, &"verificator_mc_overlays".to_string())),
+            send_new_block_candidate_counter: metrics_receiver.sink().register_counter(&"smft_candidates".into()),
+            update_workchains_counter: metrics_receiver.sink().register_counter(&"smft_workchains_updates".into()),
+            blocks_instance_counter: Arc::new(InstanceCounter::new(&metrics_receiver, &"smft_block".to_string())),
+            workchains_instance_counter: Arc::new(InstanceCounter::new(&metrics_receiver, &"smft_workchains".to_string())),
+            wc_overlays_instance_counter: Arc::new(InstanceCounter::new(&metrics_receiver, &"smft_wc_overlays".to_string())),
+            mc_overlays_instance_counter: Arc::new(InstanceCounter::new(&metrics_receiver, &"smft_mc_overlays".to_string())),
             should_stop_flag: should_stop_flag.clone(),
             dump_thread_is_stopped_flag: dump_thread_is_stopped_flag.clone(),
         };

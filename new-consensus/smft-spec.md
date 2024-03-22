@@ -156,3 +156,46 @@ Block-candidate processing within workchain has following flow:
   - if according to the workchain nodes consensus block is rejected, the validator session is marked as blamed (so all futher blocks from it won't be accepted) and validator session rotation process is initiated by sending ```ShardCollatorBlame``` messsage to other master-chain validators
   - otherwise blame all validators from initial for arbitrage ```BlockCandidateStatus::rejections_signature``` field and continue interrupted flow process
 
+# 4 Runtime metrics
+
+All SMFT metrics are configured to be sent via metrics crate (metrics::gauge! macro) for further tracking. The main metrics are listed below. Note, some metrics are computer for specific workchain NNN. The placeholder NNN should be replaced with specific workchain number (for example, NNN=0).
+- smft_block - number of blocks stored by SMFT internal database (.create - number of created, .drop - number of dropped, w/0 suffix - remaining count)
+- smft_candidates - number of block candidates received by SMFT for further processing
+- smft_mcNNN_overlay - number of nodes in MC overlay which are visible by this node
+- smft_mcNNN_overlay_in_messages - number of messages which are received by this node in MC overlay
+- smft_mcNNN_overlay_in_queries - number of queries which are received by this node in MC overlay
+- smft_mcNNN_overlay_out_messages - number of messages which are sent by this node to MC overlay
+- smft_mcNNN_overlay_out_queries - number of queries which are sent by this node to MC overlay (also change speed for this parameter is computed with suffix '.speed')
+- smft_mc_overlays - number of overlays for communication with MC
+- smft_wcNNN_block_candidate_processings - number of processed block candidates in workchain
+- smft_wcNNN_block_candidate_verifications - numbfer of verifications initiated for block candidates in WC overlay (with linked metrics '.failure' - failed verifications, '.success' - approved verifications, '.total' - all verification requests)
+- smft_wcNNN_block_status_merges - number of merges for block candidate statuses for this workchain
+- smft_wcNNN_block_status_merges_count - histogram for merges count (with suffixes '.min', '.max', '.med')
+- smft_wcNNN_block_status_processings - number of block status processings in workchain
+- smft_wcNNN_block_status_received_in_mc - number of received block statuses in MC
+- smft_wcNNN_block_status_sets - number of block status modifications
+- smft_wcNNN_block_status_to_mc_sends - number of sendings from this node to MC overlay of block statuses
+- smft_wcNNN_block_status_within_wc_sends - number of sendings of block statuses from this node to other workchain nodes
+- smft_wcNNN_in_block_candidates - number of incoming block candidates (from other workchain nodes)
+- smft_wcNNN_mc_approved - number of ACKs for blocks requested by MC (with derivative metric '.frequency')
+- smft_wcNNN_mc_delivered - number of delivered and requested block statuses to MC
+- smft_wcNNN_mc_rejected - number of NACKs for blocks requested by MC (with derivative metric '.frequency')
+- smft_wcNNN_mc_requests - number of blocks requested by MC
+- smft_wcNNN_mc_sends_per_block_candidate - average number of block statuses sends per one block
+- smft_wcNNN_merges_per_block - average number of merges per block
+- smft_wcNNN_new_block_candidates - number of new block candidates which are sent by this node
+- smft_wcNNN_overlay_in_broadcasts - number of incoming broadcasts in workchain overlay (with derivative metric '.speed')
+- smft_wcNNN_overlay_in_messages - number of incoming messages in workchain overlay (with derivative metric '.speed')
+- smft_wcNNN_overlay_in_queries - number of incoming queries in workchain overlay (with derivative metric '.speed')
+- smft_wcNNN_overlay_out_broadcasts - number of outgoing broadcasts to workchain overlay (with derivative metric '.speed')
+- smft_wcNNN_overlay_out_messages - number of outgoing messages to workchain overlay (with derivative metric '.speed')
+- smft_wcNNN_overlay_out_queries - number of outgoing queries to workchain overlay (with derivative metric '.speed')
+- smft_wcNNN_overlay_send_message_to_neighbours_calls - number of block status sends to neighbour nodes
+- smft_wcNNN_updates_per_mc_send - average number of block status updates per one block status send to MC
+- smft_wc_overlays - number of workchain overlays
+- smft_workchains - number of workchains
+- smft_workchains_updates - number of workchain configuration update requests
+- smft_wcNNN_block_mc_delay - histogram in milliseconds for delay between MC request and SMFT delivery response (with suffixes '.min', '.max', '.med')
+- smft_wcNNN_stage1_block_candidate_delivered_in_wc - histogram in milliseconds for latency between block candidate collation and receive on workchain node (with suffixes '.min', '.max', '.med')
+- smft_wcNNN_stage2_block_status_send_to_mc_latency - histogram in milliseconds for latency between block candidate collation and corresponding block status send from this node to MC validators (with suffixes '.min', '.max', '.med')
+- smft_wcNNN_stage3_block_status_received_in_mc_latency - histogram in milliseconds for latency between block candidate collation and corresponding block status receive on MC node (with suffixes '.min', '.max', '.med')

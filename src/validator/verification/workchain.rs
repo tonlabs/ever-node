@@ -290,24 +290,24 @@ impl Workchain {
             self_weak_ref: SpinMutex::new(None),
             _workchains_instance_counter: (*workchains_instance_counter).clone(),
             blocks_instance_counter,
-            merge_block_status_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_block_status_merges", workchain_id).into()),
-            set_block_status_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_block_status_sets", workchain_id).into()),
-            process_block_candidate_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_block_candidate_processings", workchain_id).into()),
-            process_block_status_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_block_status_processings", workchain_id).into()),
-            new_block_candidate_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_new_block_candidates", workchain_id).into()),
-            send_block_status_to_mc_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_block_status_to_mc_sends", workchain_id).into()),
-            send_block_status_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_block_status_within_wc_sends", workchain_id).into()),
-            external_request_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_ext_requests", workchain_id).into()),
-            external_request_delivered_blocks_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_ext_requests_delivered_blocks", workchain_id).into()),
-            external_request_approved_blocks_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_ext_requests_approved_blocks", workchain_id).into()),
-            external_request_rejected_blocks_counter: metrics_receiver.sink().register_counter(&format!("verificator_wc{}_ext_requests_rejected_blocks", workchain_id).into()),
-            block_status_received_in_mc_counter: ResultStatusCounter::new(&metrics_receiver, &format!("verificator_wc{}_block_status_received_in_mc", workchain_id)),
-            verify_block_counter: ResultStatusCounter::new(&metrics_receiver, &format!("verificator_wc{}_block_candidate_verifications", workchain_id)),
-            candidate_delivered_to_wc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:verificator_wc{}_stage1_block_candidate_delivered_in_wc", workchain_id).into()),
-            block_status_send_to_mc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:verificator_wc{}_stage2_block_status_send_to_mc_latency", workchain_id).into()),
-            block_status_received_in_mc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:verificator_wc{}_stage3_block_status_received_in_mc_latency", workchain_id).into()),
-            block_status_merges_count_histogram: metrics_receiver.sink().register_histogram(&format!("verificator_wc{}_block_status_merges_count", workchain_id).into()),
-            block_external_request_delays_histogram: metrics_receiver.sink().register_histogram(&format!("verificator_wc{}_block_ext_request_delay", workchain_id).into()),
+            merge_block_status_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_block_status_merges", workchain_id).into()),
+            set_block_status_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_block_status_sets", workchain_id).into()),
+            process_block_candidate_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_block_candidate_processings", workchain_id).into()),
+            process_block_status_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_block_status_processings", workchain_id).into()),
+            new_block_candidate_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_new_block_candidates", workchain_id).into()),
+            send_block_status_to_mc_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_block_status_to_mc_sends", workchain_id).into()),
+            send_block_status_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_block_status_within_wc_sends", workchain_id).into()),
+            external_request_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_mc_requests", workchain_id).into()),
+            external_request_delivered_blocks_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_mc_delivered", workchain_id).into()),
+            external_request_approved_blocks_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_mc_approved", workchain_id).into()),
+            external_request_rejected_blocks_counter: metrics_receiver.sink().register_counter(&format!("smft_wc{}_mc_rejected", workchain_id).into()),
+            block_status_received_in_mc_counter: ResultStatusCounter::new(&metrics_receiver, &format!("smft_wc{}_block_status_received_in_mc", workchain_id)),
+            verify_block_counter: ResultStatusCounter::new(&metrics_receiver, &format!("smft_wc{}_block_candidate_verifications", workchain_id)),
+            candidate_delivered_to_wc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:smft_wc{}_stage1_block_candidate_delivered_in_wc", workchain_id).into()),
+            block_status_send_to_mc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:smft_wc{}_stage2_block_status_send_to_mc_latency", workchain_id).into()),
+            block_status_received_in_mc_latency_histogram: metrics_receiver.sink().register_histogram(&format!("time:smft_wc{}_stage3_block_status_received_in_mc_latency", workchain_id).into()),
+            block_status_merges_count_histogram: metrics_receiver.sink().register_histogram(&format!("smft_wc{}_block_status_merges_count", workchain_id).into()),
+            block_external_request_delays_histogram: metrics_receiver.sink().register_histogram(&format!("time:smft_wc{}_block_mc_delay", workchain_id).into()),
         };
         let workchain = Arc::new(workchain);
 
@@ -339,7 +339,7 @@ impl Workchain {
             runtime.clone(),
             metrics_receiver.clone(),
             mc_overlays_instance_counter,
-            format!("verificator_mc{}_overlay", workchain_id),
+            format!("smft_mc{}_overlay", workchain_id),
             true,
         ).await?;
         *workchain.mc_overlay.lock() = Some(mc_overlay);
@@ -360,7 +360,7 @@ impl Workchain {
                 runtime.clone(),
                 metrics_receiver,
                 wc_overlays_instance_counter,
-                format!("verificator_wc{}_overlay", workchain_id),
+                format!("smft_wc{}_overlay", workchain_id),
                 false,
             ).await?;
             *workchain.workchain_overlay.lock() = Some(workchain_overlay);
@@ -378,41 +378,41 @@ impl Workchain {
 
         let workchain_id = self.workchain_id;
 
-        metrics_dumper.add_derivative_metric(format!("verificator_wc{}_block_candidate_verifications.total", workchain_id));
-        metrics_dumper.add_derivative_metric(format!("verificator_wc{}_block_candidate_verifications.success", workchain_id));
-        metrics_dumper.add_derivative_metric(format!("verificator_wc{}_block_candidate_verifications.failure", workchain_id));
-        metrics_dumper.add_derivative_metric(format!("verificator_wc{}_new_block_candidates", workchain_id));
-        metrics_dumper.add_derivative_metric(format!("verificator_mc{}_overlay_in_queries", workchain_id));
-        metrics_dumper.add_derivative_metric(format!("verificator_mc{}_overlay_out_queries.total", workchain_id));
-        metrics_dumper.add_derivative_metric(format!("verificator_mc{}_overlay_in_messages", workchain_id));
-        metrics_dumper.add_derivative_metric(format!("verificator_mc{}_overlay_out_messages", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_wc{}_block_candidate_verifications.total", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_wc{}_block_candidate_verifications.success", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_wc{}_block_candidate_verifications.failure", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_wc{}_new_block_candidates", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_mc{}_overlay_in_queries", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_mc{}_overlay_out_queries.total", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_mc{}_overlay_in_messages", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_mc{}_overlay_out_messages", workchain_id));
 
-        metrics_dumper.add_derivative_metric(format!("verificator_wc{}_block_status_processings", workchain_id));
+        metrics_dumper.add_derivative_metric(format!("smft_wc{}_block_status_processings", workchain_id));
 
-        add_compute_result_metric(metrics_dumper, &format!("verificator_wc{}_block_candidate_verifications", workchain_id));
-        add_compute_result_metric(metrics_dumper, &format!("verificator_mc{}_overlay_out_queries", workchain_id));
+        add_compute_result_metric(metrics_dumper, &format!("smft_wc{}_block_candidate_verifications", workchain_id));
+        add_compute_result_metric(metrics_dumper, &format!("smft_mc{}_overlay_out_queries", workchain_id));
 
         add_compute_relative_metric(
             metrics_dumper,
-            &format!("verificator_wc{}_merges_per_block", workchain_id),
-            &format!("verificator_wc{}_block_status_merges", workchain_id),
-            &format!("verificator_wc{}_new_block_candidates", workchain_id),
+            &format!("smft_wc{}_merges_per_block", workchain_id),
+            &format!("smft_wc{}_block_status_merges", workchain_id),
+            &format!("smft_wc{}_new_block_candidates", workchain_id),
             0.0,
         );
 
         add_compute_relative_metric(
             metrics_dumper,
-            &format!("verificator_wc{}_updates_per_mc_send", workchain_id),
-            &format!("verificator_wc{}_block_status_processings", workchain_id),
-            &format!("verificator_wc{}_block_status_to_mc_sends", workchain_id),
+            &format!("smft_wc{}_updates_per_mc_send", workchain_id),
+            &format!("smft_wc{}_block_status_processings", workchain_id),
+            &format!("smft_wc{}_block_status_to_mc_sends", workchain_id),
             0.0,
         );
 
         add_compute_relative_metric(
             metrics_dumper,
-            &format!("verificator_wc{}_mc_sends_per_block_candidate", workchain_id),
-            &format!("verificator_wc{}_block_status_to_mc_sends", workchain_id),
-            &format!("verificator_wc{}_new_block_candidates", workchain_id),
+            &format!("smft_wc{}_mc_sends_per_block_candidate", workchain_id),
+            &format!("smft_wc{}_block_status_to_mc_sends", workchain_id),
+            &format!("smft_wc{}_new_block_candidates", workchain_id),
             0.0,
         );
 
@@ -420,39 +420,39 @@ impl Workchain {
 
         add_compute_percentage_metric(
             metrics_dumper,
-            &format!("verificator_wc{}_ext_requests_delivery.frequency", workchain_id),
-            &format!("verificator_wc{}_ext_requests_delivered_blocks", workchain_id),
-            &format!("verificator_wc{}_ext_requests", workchain_id),
+            &format!("smft_wc{}_mc_delivered.frequency", workchain_id),
+            &format!("smft_wc{}_mc_delivered", workchain_id),
+            &format!("smft_wc{}_mc_requests", workchain_id),
             0.0,
         );
 
         add_compute_percentage_metric(
             metrics_dumper,
-            &format!("verificator_wc{}_ext_requests_rejected.frequency", workchain_id),
-            &format!("verificator_wc{}_ext_requests_rejected_blocks", workchain_id),
-            &format!("verificator_wc{}_ext_requests", workchain_id),
+            &format!("smft_wc{}_mc_rejected.frequency", workchain_id),
+            &format!("smft_wc{}_mc_rejected", workchain_id),
+            &format!("smft_wc{}_mc_requests", workchain_id),
             0.0,
         );
 
         add_compute_percentage_metric(
             metrics_dumper,
-            &format!("verificator_wc{}_ext_requests_approved.frequency", workchain_id),
-            &format!("verificator_wc{}_ext_requests_approved_blocks", workchain_id),
-            &format!("verificator_wc{}_ext_requests", workchain_id),
+            &format!("smft_wc{}_mc_approved.frequency", workchain_id),
+            &format!("smft_wc{}_mc_approved", workchain_id),
+            &format!("smft_wc{}_mc_requests", workchain_id),
             0.0,
         );
 
         if workchain_id != -1 {
-            add_compute_result_metric(metrics_dumper, &format!("verificator_wc{}_overlay_out_queries", workchain_id));
+            add_compute_result_metric(metrics_dumper, &format!("smft_wc{}_overlay_out_queries", workchain_id));
 
-            metrics_dumper.add_derivative_metric(format!("verificator_wc{}_overlay_in_broadcasts", workchain_id));
-            metrics_dumper.add_derivative_metric(format!("verificator_wc{}_overlay_out_broadcasts", workchain_id));
-            metrics_dumper.add_derivative_metric(format!("verificator_wc{}_overlay_in_queries", workchain_id));
-            metrics_dumper.add_derivative_metric(format!("verificator_wc{}_in_block_candidates", workchain_id));
-            metrics_dumper.add_derivative_metric(format!("verificator_wc{}_overlay_out_queries.total", workchain_id));
-            metrics_dumper.add_derivative_metric(format!("verificator_wc{}_overlay_send_message_to_neighbours_calls", workchain_id));
-            metrics_dumper.add_derivative_metric(format!("verificator_wc{}_overlay_in_messages", workchain_id));
-            metrics_dumper.add_derivative_metric(format!("verificator_wc{}_overlay_out_messages", workchain_id));
+            metrics_dumper.add_derivative_metric(format!("smft_wc{}_overlay_in_broadcasts", workchain_id));
+            metrics_dumper.add_derivative_metric(format!("smft_wc{}_overlay_out_broadcasts", workchain_id));
+            metrics_dumper.add_derivative_metric(format!("smft_wc{}_overlay_in_queries", workchain_id));
+            metrics_dumper.add_derivative_metric(format!("smft_wc{}_in_block_candidates", workchain_id));
+            metrics_dumper.add_derivative_metric(format!("smft_wc{}_overlay_out_queries.total", workchain_id));
+            metrics_dumper.add_derivative_metric(format!("smft_wc{}_overlay_send_message_to_neighbours_calls", workchain_id));
+            metrics_dumper.add_derivative_metric(format!("smft_wc{}_overlay_in_messages", workchain_id));
+            metrics_dumper.add_derivative_metric(format!("smft_wc{}_overlay_out_messages", workchain_id));
         }
     }
 
