@@ -2,9 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## Version 0.56.2
+## Version 0.56.4
 
 - Supported new multi-networks API of DHT
+- United crate for protocols
+
+## Version 0.56.3
+
+- Fixed UNREGISTERED_CHAIN_MAX_LEN const for Venom blockchain
+
+## Version 0.56.2
+
+- Fixed bug in storing cells mechanism.
 
 ## Version 0.56.1
 

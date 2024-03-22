@@ -115,6 +115,7 @@ tokio = { features = [ 'macros' ], version = '1.5' }
 default = [ 'telemetry', 'ton_types/export_key' ]
 export_key = [ 'catchain/export_key', 'ton_types/export_key' ]
 external_db = [ 'rdkafka' ]
+fast_finality_extra = [  ]
 gosh = [ 'ton_block/gosh', 'ton_vm/gosh' ]
 log_metrics = [  ]
 prometheus = [ 'metrics-exporter-prometheus', 'log_metrics' ]
