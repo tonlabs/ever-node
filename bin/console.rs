@@ -43,6 +43,7 @@ include!("../common/src/test.rs");
 
 const ELECTOR_ABI: &[u8] = include_bytes!("Elector.abi.json"); //elector's ABI
 const ELECTOR_PROCESS_NEW_STAKE_FUNC_NAME: &str = "process_new_stake"; //elector process_new_stake function name
+const USE_FIFTH_ELECTOR: bool = true;
 
 trait SendReceive {
     fn send<Q: ToString>(params: impl Iterator<Item = Q>) -> Result<TLObject>;
@@ -281,7 +282,7 @@ impl SendReceive for ExportPub {
                     .ok_or_else(|| error!("Public key not found in answer!"))?
                     .clone()
             }
-        };        
+        };
         let msg = format!("imported key: {} {}", hex::encode(&pub_key), base64_encode(&pub_key));
         Ok((msg, pub_key))
     }
@@ -708,16 +709,6 @@ impl ControlClient {
         ).await?;
         log::trace!("{}", s);
 
-        let (s, bls) = self.process_command("newkey", vec!["bls"].iter()).await?;
-        log::trace!("{}", s);
-        let bls_str = &hex::encode_upper(&bls)[..];
-
-        let (s, bls_pub_key) = self.process_command("exportpub", vec![bls_str].iter()).await?;
-        log::trace!("{}", s);
-
-        let (s, _) = self.process_command("addblskey", vec![perm_str.clone(), bls_str.to_string(), elect_time_str].iter()).await?;
-        log::trace!("{}", s);
-
         // validator-elect-req.fif
         let mut data = 0x654C5074u32.to_be_bytes().to_vec();
         data.extend_from_slice(&elect_time.to_be_bytes());
@@ -731,64 +722,70 @@ impl ControlClient {
         Ed25519KeyOption::from_public_key(&pub_key[..].try_into()?)
             .verify(&data, &signature)?;
 
-        let contract = Contract::load(ELECTOR_ABI).expect("Elector's ABI must be valid");
-        let process_new_stake_fn = contract
-            .function(ELECTOR_PROCESS_NEW_STAKE_FUNC_NAME)
-            .expect("Elector contract must have 'process_new_stake' function for elections")
-            .clone();
-        log::trace!("Use process new stake function '{}' with id={:08X}",
-            ELECTOR_PROCESS_NEW_STAKE_FUNC_NAME, process_new_stake_fn.get_function_id());
+        let body = if USE_FIFTH_ELECTOR {
+            let query_id = now() as u64;
+            // validator-elect-signed.fif
+            let mut data = 0x4E73744Bu32.to_be_bytes().to_vec();
+            data.extend_from_slice(&query_id.to_be_bytes());
+            data.extend_from_slice(&pub_key);
+            data.extend_from_slice(&elect_time.to_be_bytes());
+            data.extend_from_slice(&max_factor.to_be_bytes());
+            data.extend_from_slice(&adnl);
+            let len = data.len() * 8;
+            let mut body = BuilderData::with_raw(data, len)?;
+            let len = signature.len() * 8;
+            body.checked_append_reference(BuilderData::with_raw(signature, len)?.into_cell()?)?;
+            let body = body.into_cell()?;
+            body
+        } else {
+            let (s, bls) = self.process_command("newkey", vec!["bls"].iter()).await?;
+            log::trace!("{}", s);
+            let bls_str = &hex::encode_upper(&bls)[..];
 
-        let time_now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
-        let header: HashMap<_, _> = vec![("time".to_owned(), TokenValue::Time(time_now_ms))]
-            .into_iter()
-            .collect();        
+            let (s, bls_pub_key) = self.process_command("exportpub", vec![bls_str].iter()).await?;
+            log::trace!("{}", s);
 
-        let query_id = now() as u64;
+            let (s, _) = self.process_command("addblskey", vec![perm_str.clone(), bls_str.to_string(), elect_time_str].iter()).await?;
+            log::trace!("{}", s);
 
-        let parameters = [
-            Token::new("query_id", Self::convert_to_uint(&query_id.to_be_bytes(), 8)),
-            Token::new("validator_pubkey", Self::convert_to_uint(&pub_key, 32)),
-            Token::new("stake_at", Self::convert_to_uint(&elect_time.to_be_bytes(), 4)),
-            Token::new("max_factor", Self::convert_to_uint(&max_factor.to_be_bytes(), 4)),
-            Token::new("adnl_addr", Self::convert_to_uint(&adnl, 32)),
-            Token::new("bls_key1", Self::convert_to_uint(&bls_pub_key[0..32], 32)), //256 bits
-            Token::new("bls_key2", Self::convert_to_uint(&bls_pub_key[32..], 16)), //128 bits
-            Token::new("signature", TokenValue::Bytes(signature.to_vec())),
-        ];
+            let contract = Contract::load(ELECTOR_ABI).expect("Elector's ABI must be valid");
+            let process_new_stake_fn = contract
+                .function(ELECTOR_PROCESS_NEW_STAKE_FUNC_NAME)
+                .expect("Elector contract must have 'process_new_stake' function for elections")
+                .clone();
+            log::trace!("Use process new stake function '{}' with id={:08X}",
+                ELECTOR_PROCESS_NEW_STAKE_FUNC_NAME, process_new_stake_fn.get_function_id());
 
-        const INTERNAL_CALL: bool = true; //internal message
+            let time_now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            let header: HashMap<_, _> = vec![("time".to_owned(), TokenValue::Time(time_now_ms))]
+                .into_iter()
+                .collect();
 
-        let body = process_new_stake_fn
-            .encode_input(&header, &parameters, INTERNAL_CALL, None, None)
-            .and_then(|builder| builder.into_cell())?;
+            let query_id = now() as u64;
 
-/*        // validator-elect-signed.fif
-        let mut data = 0x4E73744Bu32.to_be_bytes().to_vec();
-        data.extend_from_slice(&query_id.to_be_bytes());
-        data.extend_from_slice(&pub_key);
-        data.extend_from_slice(&elect_time.to_be_bytes());
-        data.extend_from_slice(&max_factor.to_be_bytes());
-        data.extend_from_slice(&adnl);
+            let parameters = [
+                Token::new("query_id", Self::convert_to_uint(&query_id.to_be_bytes(), 8)),
+                Token::new("validator_pubkey", Self::convert_to_uint(&pub_key, 32)),
+                Token::new("stake_at", Self::convert_to_uint(&elect_time.to_be_bytes(), 4)),
+                Token::new("max_factor", Self::convert_to_uint(&max_factor.to_be_bytes(), 4)),
+                Token::new("adnl_addr", Self::convert_to_uint(&adnl, 32)),
+                Token::new("bls_key1", Self::convert_to_uint(&bls_pub_key[0..32], 32)), //256 bits
+                Token::new("bls_key2", Self::convert_to_uint(&bls_pub_key[32..], 16)), //128 bits
+                Token::new("signature", TokenValue::Bytes(signature.to_vec())),
+            ];
 
-        data.extend_from_slice(&bls_pub_key[0..31]); // 256 bits
+            const INTERNAL_CALL: bool = true; //internal message
 
-        let mut data2 = BuilderData::new();
-        data2.append_raw(&bls_pub_key[32..], 18); // 128 bits
-        let len = signature.len() * 8;
-        data2.append_raw(signature.as_slice(), len)?;
-
-        let len = data.len() * 8;
-        let mut body = BuilderData::with_raw(data, len)?;
-        let len = signature.len() * 8;
-        body.append_reference(data2);
-
-        /////////---------*/
+            let body = process_new_stake_fn
+                .encode_input(&header, &parameters, INTERNAL_CALL, None, None)
+                .and_then(|builder| builder.into_cell())?;
+            body
+        };
         log::trace!("message body {}", body);
-        let data = write_boc(&body)?;
+        let data = ton_types::write_boc(&body)?;
         let path = params.next().map(
             |path| path.to_string()).unwrap_or("validator-query.boc".to_string()
         );
