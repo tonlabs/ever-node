@@ -25,6 +25,7 @@ use ton_types::UInt256;
 use ton_types::KeyOption;
 use ton_types::Result;
 use validator_session::PrivateKey;
+use validator_session::PublicKeyHash;
 use catchain::profiling::InstanceCounter;
 
 mod block;
@@ -75,7 +76,7 @@ pub trait VerificationManager: Sync + Send {
     /// Update workchains
     async fn update_workchains<'a>(
         &'a self,
-        local_key: PrivateKey,
+        local_key_id: PublicKeyHash,
         local_bls_key: PrivateKey,
         workchain_id: i32,
         utime_since: u32,

@@ -27,6 +27,7 @@ use ton_api::ton::ton_node::broadcast::BlockCandidateBroadcast;
 use ton_types::Result;
 use catchain::utils::MetricsDumper;
 use catchain::utils::MetricsHandle;
+use catchain::PublicKeyHash;
 use metrics::Recorder;
 use catchain::utils::compute_instance_counter;
 use catchain::check_execution_time;
@@ -214,7 +215,7 @@ impl VerificationManager for VerificationManagerImpl {
     /// Update workchains
     async fn update_workchains<'a>(
         &'a self,
-        local_key: PrivateKey,
+        local_key_id: PublicKeyHash,
         local_bls_key: PrivateKey,
         workchain_id: i32,
         utime_since: u32,
@@ -239,7 +240,7 @@ impl VerificationManager for VerificationManagerImpl {
         match Self::get_workchain_by_validator_set(
             &engine,
             self.runtime.clone(),
-            &local_key,
+            &local_key_id,
             &local_bls_key,
             &current_workchains,
             workchain_id,
@@ -300,7 +301,7 @@ impl VerificationManagerImpl {
     async fn get_workchain_by_validator_set(
         engine: &EnginePtr,
         runtime: tokio::runtime::Handle,
-        local_key: &PrivateKey,
+        local_key_id: &PublicKeyHash,
         local_bls_key: &PrivateKey,
         workchains: &WorkchainMapPtr,
         workchain_id: i32,
@@ -336,7 +337,7 @@ impl VerificationManagerImpl {
             mc_validators.clone(),
             wc_validator_set_hash,
             mc_validator_set_hash,
-            local_key,
+            local_key_id,
             local_bls_key,
             listener.clone(),
             metrics_receiver,

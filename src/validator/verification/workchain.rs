@@ -80,7 +80,6 @@ pub struct Workchain {
     workchain_id: i32,                    //workchain identifier
     self_weak_ref: SpinMutex<Option<Weak<Workchain>>>, //self weak reference
     wc_cutoff_weight: ValidatorWeight,    //cutoff weight for consensus in WC
-    _local_key: PrivateKey,               //private key
     local_bls_key: PrivateKey,            //private BLS key
     local_id: PublicKeyHash,              //local ID for this node
     workchain_overlay: SpinMutex<Option<Arc<WorkchainOverlay>>>, //workchain overlay
@@ -143,7 +142,7 @@ impl Workchain {
         mc_validators: Vec<ValidatorDescr>,
         wc_validator_set_hash: UInt256,
         mc_validator_set_hash: UInt256,
-        local_key: &PrivateKey,
+        local_id: &PublicKeyHash,
         local_bls_key: &PrivateKey,
         listener: VerificationListenerPtr,
         metrics_receiver: MetricsHandle,
@@ -152,7 +151,6 @@ impl Workchain {
         wc_overlays_instance_counter: Arc<InstanceCounter>,
         mc_overlays_instance_counter: Arc<InstanceCounter>,
     ) -> Result<Arc<Self>> {
-        let local_id = local_key.id();
         let mut wc_local_idx = -1;
         let mut mc_local_idx = -1;
         let mut local_adnl_id = None;
@@ -276,7 +274,6 @@ impl Workchain {
             wc_validator_set_hash,
             mc_validator_set_hash,
             wc_cutoff_weight,
-            _local_key: local_key.clone(),
             local_bls_key: local_bls_key.clone(),
             local_adnl_id: local_adnl_id.clone().into(),
             local_id: local_id.clone(),

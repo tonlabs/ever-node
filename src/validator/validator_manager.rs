@@ -1352,30 +1352,38 @@ impl ValidatorManagerImpl {
                         let found_in_mc = self.find_us(&mc_validators).is_some();
                         let verification_listener: Arc<dyn VerificationListener> = verification_listener.clone();
                         let verification_listener = Arc::downgrade(&verification_listener);
-                        let local_key = self.validator_list_status.get_local_key().expect("Validator must have local key");
-                        let utime_since: u32 = self.validator_list_status.get_curr_utime_since().expect("Validator curr_utime_since must be set");
-                        log::debug!(target: "verificator", "Request BLS key");
-                        let mut local_bls_key = self.engine.get_validator_bls_key(local_key.id()).await;
-                        log::debug!(target: "verificator", "Request BLS key done");
-                        if local_bls_key.is_none() && GENERATE_MISSING_BLS_KEY {
-                            match VerificationFactory::generate_test_bls_key(&local_key) {
-                                Ok(bls_key) => local_bls_key = Some(bls_key),
-                                Err(err) => log::error!(target: "verificator", "Can't generate test BLS key: {:?}", err),
-                            }
-                        }
+                        if let Some(local_key) = self.validator_list_status.get_local_key() {
+                            let local_key_id = local_key.id();
 
-                        match local_bls_key {
-                            Some(local_bls_key) => {
-                                if found_in_wc || found_in_mc {
-                                    log::debug!(target: "verificator", "Update workchains start");
-                                    verification_manager.update_workchains(local_key, local_bls_key, workchain_id, utime_since, &workchain_validators, &mc_validators, &verification_listener).await;
-                                    are_workchains_updated = true;
-                                    log::debug!(target: "verificator", "Update workchains finish");
-                                } else {
-                                    log::debug!(target: "verificator", "Skip workchains update because we are not present in WC/MC sets for workchain_id={}", workchain_id);
+                            if let Some(utime_since) = self.validator_list_status.get_curr_utime_since() {
+                                log::trace!(target: "verificator", "Request BLS key");
+                                let mut local_bls_key = self.engine.get_validator_bls_key(local_key_id).await;
+                                log::trace!(target: "verificator", "Request BLS key done");
+                                if local_bls_key.is_none() && GENERATE_MISSING_BLS_KEY {
+                                    match VerificationFactory::generate_test_bls_key(&local_key) {
+                                        Ok(bls_key) => local_bls_key = Some(bls_key),
+                                        Err(err) => log::error!(target: "verificator", "Can't generate test BLS key: {:?}", err),
+                                    }
                                 }
-                            },
-                            None => log::error!(target: "validator", "Can't create verification workchains: no BLS private key attached"),
+
+                                match local_bls_key {
+                                    Some(local_bls_key) => {
+                                        if found_in_wc || found_in_mc {
+                                            log::debug!(target: "verificator", "Update workchains start");
+                                            verification_manager.update_workchains(local_key_id.clone(), local_bls_key, workchain_id, *utime_since, &workchain_validators, &mc_validators, &verification_listener).await;
+                                            are_workchains_updated = true;
+                                            log::debug!(target: "verificator", "Update workchains finish");
+                                        } else {
+                                            log::debug!(target: "verificator", "Skip workchains update because we are not present in WC/MC sets for workchain_id={}", workchain_id);
+                                        }
+                                    },
+                                    None => log::error!(target: "verificator", "Can't create verification workchains: no BLS private key attached"),
+                                }
+                            } else {
+                                log::warn!(target: "verificator", "Validator curr_utime_since is not set");
+                            }
+                        } else {
+                            log::warn!(target: "verificator", "Validator local key is not found");
                         }
                     }
                     Err(err) => {
