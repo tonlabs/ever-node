@@ -198,10 +198,7 @@ impl StorageCell {
         };
 
         let boc_db = self.boc_db.upgrade().ok_or_else(|| error!("BocDb is dropped"))?;
-        let storage_cell = boc_db.load_cell(
-            &hash,
-            self.use_cache
-        )?;
+        let storage_cell = boc_db.load_storage_cell(&hash, self.use_cache)?;
 
         if self.use_cache {
             self.references.write()[index].cell = 

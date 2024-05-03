@@ -347,7 +347,7 @@ impl BlockStuff {
                 BlockKind::QueueUpdate{queue_update_for: *queue_update_for, empty: *empty },
             BlockOrigin::MeshUpdate{network_id, ..} => BlockKind::MeshUpdate{network_id: *network_id},
             BlockOrigin::MeshKit{network_id, ..} => BlockKind::MeshKit{network_id: *network_id},
-        }
+    }
     }
 
     pub fn block(&self) -> Result<&Block> {
@@ -371,7 +371,7 @@ impl BlockStuff {
         if let Some(wc) = self.is_queue_update_for() {
             if wc != workchain_id {
                 fail!("{} is not queue update for wc {}", self.id(), workchain_id)
-            }
+        }
         }
         self
             .virt_block()?

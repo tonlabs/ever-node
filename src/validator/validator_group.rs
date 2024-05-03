@@ -854,7 +854,7 @@ impl ValidatorGroup {
                     run_validate_query(
                         self.shard().clone(),
                         min_ts,
-                        mc.clone(),
+                        mc.seq_no(),
                         prev_block_ids,
                         candidate.clone(),
                         self.validator_set.clone(),

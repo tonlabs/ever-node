@@ -38,7 +38,7 @@ pub async fn run_validate_query_any_candidate(
     let info = real_block.read_info()?;
     let prev = info.read_prev_ids()?;
     let mc_state = engine.load_last_applied_mc_state().await?;
-    let min_masterchain_block_id = mc_state.find_block_id(info.min_ref_mc_seqno())?;
+    let min_mc_seq_no = info.min_ref_mc_seqno();
     let mut cc_seqno_with_delta = 0;
     if let Some(mc_state_extra) = mc_state.state()?.read_custom()? {
         let cc_seqno_from_state = if shard.is_masterchain() {
@@ -62,7 +62,7 @@ pub async fn run_validate_query_any_candidate(
         run_validate_query(
             shard,
             SystemTime::now(),
-            min_masterchain_block_id,
+            min_mc_seq_no,
             prev,
             block,
             validator_set,
@@ -78,7 +78,7 @@ pub async fn run_validate_query_any_candidate(
 pub async fn run_validate_query(
     shard: ShardIdent,
     _min_ts: SystemTime,
-    min_masterchain_block_id: BlockIdExt,
+    min_mc_seq_no: u32,
     prev: Vec<BlockIdExt>,
     block: super::BlockCandidate,
     set: ValidatorSet,
@@ -95,7 +95,7 @@ pub async fn run_validate_query(
         "({}): before validator query shard: {}, min: {}, seqno: {}",
         next_block_descr,
         shard,
-        min_masterchain_block_id,
+        min_mc_seq_no,
         seqno + 1
     );
 
@@ -107,7 +107,7 @@ pub async fn run_validate_query(
     let validator_result = if !test_bundles_config.is_enable() {
         ValidateQuery::new(
             shard.clone(),
-            min_masterchain_block_id.seq_no(),
+            min_mc_seq_no,
             prev,
             block,
             set,
@@ -119,7 +119,7 @@ pub async fn run_validate_query(
     } else {
         let query = ValidateQuery::new(
             shard.clone(),
-            min_masterchain_block_id.seq_no(),
+            min_mc_seq_no,
             prev.clone(),
             block.clone(),
             set,
@@ -136,11 +136,10 @@ pub async fn run_validate_query(
                 if !CollatorTestBundle::exists(test_bundles_config.path(), &id) {
                     let path = test_bundles_config.path().to_string();
                     let engine = engine.clone();
-                    let shard = shard.clone();
                     tokio::spawn(
                         async move {
                             match CollatorTestBundle::build_for_validating_block(
-                                shard, min_masterchain_block_id, prev, block, &engine
+                                &engine, prev, block
                             ).await {
                                 Err(e) => log::error!(
                                     "({}): Error while test bundle for {} building: {}", next_block_descr, id, e
@@ -231,63 +230,67 @@ pub async fn run_collate_query (
         UInt256::from(collator_id.pub_key()?),
         engine.clone(),
         None,
-        CollatorSettings::default()
     )?;
-    let collator_result = collator.collate().await;
+    let collate_result = collator.collate(CollatorSettings::default()).await;
 
 
     let labels = [("shard", shard.to_string())];
     #[cfg(not(feature = "statsd"))]
     metrics::decrement_gauge!("run_collators", 1.0, &labels);
+    let mut usage_tree_opt = None;
 
-    match collator_result {
-        Ok((candidate, _)) => {
-            metrics::increment_counter!("successful_collations", &labels);
-
-            return Ok(validator_query_candidate_to_validator_block_candidate(collator_id, candidate))
-        }
-        Err(err) => {
-            let labels = [("shard", shard.to_string())];
-            metrics::increment_counter!("failed_collations", &labels);
-            let test_bundles_config = &engine.test_bundles_config().collator;
-
-            let err_str = if test_bundles_config.is_enable() {
-                err.to_string()
+    let err = match collate_result {
+        Ok(collate_result) => {
+            if let Some(candidate) = collate_result.candidate {
+                metrics::increment_counter!("successful_collations", &labels);
+                
+                return Ok(validator_query_candidate_to_validator_block_candidate(collator_id, candidate))
             } else {
-                String::default()
-            };
-
-            #[cfg(feature = "telemetry")]
-            engine.collator_telemetry().failed_attempt(&shard, &err_str);
-
-            if test_bundles_config.is_enable() {
-                if test_bundles_config.need_to_build_for(&err_str) {
-                    let id = BlockIdExt {
-                        shard_id: shard,
-                        seq_no: prev.iter().max_by_key(|id| id.seq_no()).unwrap().seq_no() + 1,
-                        root_hash: UInt256::default(),
-                        file_hash: UInt256::default(),
-                    };
-                    if !CollatorTestBundle::exists(test_bundles_config.path(), &id) {
-                        let path = test_bundles_config.path().to_string();
-                        let engine = engine.clone();
-                        tokio::spawn(async move {
-                            match CollatorTestBundle::build_for_collating_block(prev, &engine).await {
-                                Err(e) => log::error!("({}): Error while test bundle for {} building: {}", next_block_descr, id, e),
-                                Ok(mut b) => {
-                                    b.set_notes(err_str.to_string());
-                                    if let Err(e) = b.save(&path) {
-                                        log::error!("({}): Error while test bundle for {} saving: {}", next_block_descr, id, e);
-                                    } else {
-                                        log::info!("({}): Built test bundle for {}", next_block_descr, id);
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
+                usage_tree_opt = Some(collate_result.usage_tree);
+                collate_result.error.unwrap()
             }
-            return Err(err);
+        }
+        Err(err) => err
+    };
+    let labels = [("shard", shard.to_string())];
+    metrics::increment_counter!("failed_collations", &labels);
+    let test_bundles_config = &engine.test_bundles_config().collator;
+
+    let err_str = if test_bundles_config.is_enable() {
+        err.to_string()
+    } else {
+        String::default()
+    };
+
+    #[cfg(feature = "telemetry")]
+    engine.collator_telemetry().failed_attempt(&shard, &err_str);
+
+    if test_bundles_config.is_enable() {
+        if test_bundles_config.need_to_build_for(&err_str) {
+            let id = BlockIdExt {
+                shard_id: shard,
+                seq_no: prev.iter().max_by_key(|id| id.seq_no()).unwrap().seq_no() + 1,
+                root_hash: UInt256::default(),
+                file_hash: UInt256::default(),
+            };
+            if !CollatorTestBundle::exists(test_bundles_config.path(), &id) {
+                let path = test_bundles_config.path().to_string();
+                let engine = engine.clone();
+                tokio::spawn(async move {
+                    match CollatorTestBundle::build_for_collating_block(&engine, prev, usage_tree_opt).await {
+                        Err(e) => log::error!("({}): Error while test bundle for {} building: {}", next_block_descr, id, e),
+                        Ok(mut b) => {
+                            b.set_notes(err_str.to_string());
+                            if let Err(e) = b.save(&path) {
+                                log::error!("({}): Error while test bundle for {} saving: {}", next_block_descr, id, e);
+                            } else {
+                                log::info!("({}): Built test bundle for {}", next_block_descr, id);
+                            }
+                        }
+                    }
+                });
+            }
         }
     }
+    Err(err)
 }

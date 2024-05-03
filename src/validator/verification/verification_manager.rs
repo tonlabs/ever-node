@@ -122,14 +122,8 @@ impl VerificationManager for VerificationManagerImpl {
         block_id: &BlockIdExt,
     ) -> (bool, bool) {
         let workchain_id = block_id.shard_id.workchain_id();
-        let workchain = match self.workchains.lock().get(&workchain_id) {
-            Some(workchain) => Some(workchain.clone()),
-            None => None,
-        };
-
-        if let Some(workchain) = workchain {
-            let candidate_id =
-                Workchain::get_candidate_id_impl(block_id);
+        if let Some(workchain) = self.workchains.lock().get(&workchain_id) {
+            let candidate_id = Workchain::get_candidate_id_impl(block_id);
 
             if let Some(block) = workchain.get_block_by_id(&candidate_id) {
                 return workchain.get_block_status(&block);

@@ -2764,12 +2764,12 @@ impl ValidateQuery {
         enq: MsgEnqueueStuff,
         created_lt: u64,
         key: &OutMsgQueueKey,
-        nb_block_id: &BlockIdExt,
+        nb_shard: &ShardIdent,
     ) -> Result<bool> {
         if created_lt != enq.created_lt() {
             reject_query!("EnqueuedMsg with key {:x} in outbound queue of our neighbor {} \
                 pretends to have been created at lt {} but its actual creation lt is {}",
-                    key, nb_block_id, created_lt, enq.created_lt())
+                    key, nb_shard, created_lt, enq.created_lt())
         }
         CHECK!(base.shard().contains_full_prefix(&enq.next_prefix()));
 
@@ -2785,7 +2785,7 @@ impl ValidateQuery {
             // just check that we have not imported it once again
             if in_msg.is_some() {
                 reject_query!("have an InMsg entry for processing again already processed EnqueuedMsg with key {:x} \
-                    of neighbor {}", key, nb_block_id)
+                    of neighbor {}", key, nb_shard)
             }
             if base.shard().contains_full_prefix(&enq.cur_prefix()) {
                 // if this message comes from our own outbound queue, we must have dequeued it
@@ -2813,7 +2813,7 @@ impl ValidateQuery {
             //     log::error!(target: "validate_query", "internal inconsistency: new ProcessedInfo claims \
             //         to have processed all messages up to ({},{}) but we had somehow already processed a message ({},{}) \
             //         from OutMsgQueue of neighbor {} key {}", self.claimed_proc_lt, self.claimed_proc_hash.to_hex_string(),
-            //             created_lt, key.hash.to_hex_string(), nb_block_id, key.to_hex_string());
+            //             created_lt, key.hash.to_hex_string(), nb_shard, key.to_hex_string());
             //     return Ok(false)
             // }
             // Ok(true)
@@ -2828,7 +2828,7 @@ impl ValidateQuery {
                         to have processed all messages up to ({},{:x}), but we had somehow processed in this block \
                         a message ({},{:x}) from OutMsgQueue of neighbor {} key {:x}",
                             claimed_proc_lt, claimed_proc_hash,
-                            created_lt, key, nb_block_id, key)
+                            created_lt, key, nb_shard, key)
                 }
             }
             // must have a msg_import_fin or msg_import_tr InMsg record
@@ -2837,15 +2837,15 @@ impl ValidateQuery {
                 Some(InMsg::Transit(info)) => info.in_envelope_message_hash(),
                 None => reject_query!("there is no InMsg entry for processing EnqueuedMsg with key {:x} \
                     of neighbor {} which is claimed to be processed by new ProcessedInfo of this block", 
-                        key, nb_block_id),
+                        key, nb_shard),
                 _ => reject_query!("expected either a msg_import_fin or a msg_import_tr InMsg record \
                     for processing EnqueuedMsg with key {:x} of neighbor {} which is claimed to be processed \
-                    by new ProcessedInfo of this block", key, nb_block_id)
+                    by new ProcessedInfo of this block", key, nb_shard)
             };
             if hash != enq.envelope_hash() {
                 reject_query!("InMsg record for processing EnqueuedMsg with key {:x} of neighbor {} \
                     which is claimed to be processed by new ProcessedInfo of this block contains a reference \
-                    to a different MsgEnvelope", key, nb_block_id);
+                    to a different MsgEnvelope", key, nb_shard);
             }
             // all other checks have been done while checking InMsgDescr
             Ok(true)
@@ -2862,7 +2862,7 @@ impl ValidateQuery {
                             base.next_block_descr,
                             claimed_proc_lt, claimed_proc_hash,
                             created_lt, key.hash,
-                            nb_block_id, key);
+                            nb_shard, key);
                 }
             }
             Ok(false)
@@ -2874,18 +2874,18 @@ impl ValidateQuery {
         log::debug!(target: "validate_query", "({}): check_in_queue len: {}", base.next_block_descr, manager.neighbors().len());
         let mut iter = manager.merge_out_queue_iter(base.shard())?;
         while let Some(k_v) = iter.next() {
-            let (msg_key, enq, lt, nb_block_id) = k_v?;
-            if !base.split_queues && !nb_block_id.shard().contains_full_prefix(enq.cur_prefix()) {
+            let (msg_key, enq, lt, nb_shard) = k_v?;
+            if !base.split_queues && !nb_shard.contains_full_prefix(enq.cur_prefix()) {
                 // this case from shard split result without splitting queues 
                 continue;
             }
             log::debug!(target: "validate_query", "({}): processing inbound message with \
-                (lt,hash)=({},{:x}) from neighbor - {}", base.next_block_descr, lt, msg_key.hash, nb_block_id);
+                (lt,hash)=({},{:x}) from neighbor - {}", base.next_block_descr, lt, msg_key.hash, nb_shard);
             // if (verbosity > 3) {
             //     std::cerr << "inbound message: lt=" << kv->lt from=" << kv->source key=" << kv->key.to_hex_string() msg=";
             //     block::gen::t_EnqueuedMsg.print(std::cerr, *(kv->msg));
             // }
-            match Self::check_neighbor_outbound_message_processed(base, manager, enq, lt, &msg_key, &nb_block_id) {
+            match Self::check_neighbor_outbound_message_processed(base, manager, enq, lt, &msg_key, &nb_shard) {
                 Err(err) => {
                     // if (verbosity > 1) {
                     //     std::cerr << "invalid neighbor outbound message: lt=" << kv->lt from=" << kv->source
@@ -2893,7 +2893,7 @@ impl ValidateQuery {
                     //     block::gen::t_EnqueuedMsg.print(std::cerr, *(kv->msg));
                     // }
                     reject_query!("error processing outbound internal message {:x} of neighbor {} : {}",
-                        msg_key.hash, nb_block_id, err)
+                        msg_key.hash, nb_shard, err)
                 }
                 Ok(false) => return Ok(false),
                 _ => ()
