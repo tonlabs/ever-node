@@ -934,7 +934,6 @@ async fn main() {
 
 #[cfg(test)]
 mod test {
-    
     use super::*;
     use std::{fs, path::Path, sync::Arc, thread};
     use serde_json::json;
@@ -946,13 +945,17 @@ mod test {
         ShardIdent, ShardStateUnsplit, ValidatorDescr, ValidatorSet
     };
     use ever_node::{
-        block::BlockKind, collator_test_bundle::{create_engine_telemetry, create_engine_allocated},
+        block::BlockKind,
+        collator_test_bundle::create_engine_allocated,
         config::TonNodeConfig, engine_traits::{EngineAlloc, EngineOperations},
         internal_db::{InternalDbConfig, InternalDb, state_gc_resolver::AllowStateGcSmartResolver}, 
         network::{control::{ControlServer, DataSource}, node_network::NodeNetwork},
         shard_state::ShardStateStuff, shard_states_keeper::PinnedShardStateGuard,
         validator::validator_manager::ValidationStatus
     };
+
+    #[cfg(feature = "telemetry")]
+    use ever_node::collator_test_bundle::create_engine_telemetry;
     #[cfg(feature = "telemetry")]
     use ever_node::engine_traits::EngineTelemetry;
 

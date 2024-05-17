@@ -62,8 +62,6 @@ use ever_block::{
     AccountIdPrefixFull, BlockIdExt, CellsFactory, GlobalCapabilities, Message, OutMsgQueue,
     OutMsgQueueInfo, ShardIdent, MASTERCHAIN_ID, SHARD_FULL
 };
-#[cfg(feature="workchains")]
-use ever_block::{BASE_WORKCHAIN_ID, INVALID_WORKCHAIN_ID};
 use ever_block::{error, fail, KeyId, KeyOption, Result, UInt256};
 use validator_session::{BlockHash, SessionId, ValidatorBlockCandidate};
 

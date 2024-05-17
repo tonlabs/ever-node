@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Version 0.58.7
+
+- Enhanced bundler engine for creating short and quick bundles
+  using state proofs instead of full state for debugging and testing purposes
+
 ## Version 0.58.6
 
 - Send SMFT messages to random workchain nodes to improve delivery across workchain

@@ -257,8 +257,7 @@ impl OutMsgQueueInfoStuff {
                 0x5777784F96FB1CFFu64,
                 "05aa297e3a2e003e1449e1297742d64f188985dc029c620edc84264f9786c0c3".parse().unwrap()
             );
-            let key = SliceData::load_bitstring(key.write_to_new_cell()?)?;
-            out_queue.remove(key)?;
+            out_queue.remove(key.write_to_bitstring()?)?;
         }
 
         let ihr_pending = out_queue_info.ihr_pending().clone();
@@ -1403,14 +1402,14 @@ impl CachedStates {
 
 impl MsgQueueManager {
     /// create iterator for merging all output messages from all neighbors to our shard
-    pub fn merge_out_queue_iter(&self, shard: &ShardIdent) -> Result<MsgQueueMergerIterator<BlockIdExt>> {
+    pub fn merge_out_queue_iter(&self, shard: &ShardIdent) -> Result<MsgQueueMergerIterator<ShardIdent>> {
         MsgQueueMergerIterator::from_manager(self, shard)
     }
     /// find enquque message and return it with neighbor id 
-    pub fn find_message(&self, key: &OutMsgQueueKey, prefix: &AccountIdPrefixFull) -> Result<(Option<BlockIdExt>, Option<MsgEnqueueStuff>)> {
+    pub fn find_message(&self, key: &OutMsgQueueKey, prefix: &AccountIdPrefixFull) -> Result<(Option<ShardIdent>, Option<MsgEnqueueStuff>)> {
         for nb in &self.neighbors {
             if !nb.is_disabled() && nb.shard().contains_full_prefix(prefix) {
-                return Ok((Some(nb.block_id().clone()), nb.message(key)?))
+                return Ok((Some(nb.shard().clone()), nb.message(key)?))
             }
         }
         Ok((None, None))
@@ -1497,23 +1496,15 @@ pub struct MsgQueueMergerIterator<T> {
     roots: Vec<RootRecord<T>>,
 }
 
-impl MsgQueueMergerIterator<BlockIdExt> {
+impl MsgQueueMergerIterator<ShardIdent> {
     pub fn from_manager(manager: &MsgQueueManager, shard: &ShardIdent) -> Result<Self> {
         let shard_prefix = shard.shard_key(true);
         let mut roots = vec![];
         for nb in manager.neighbors.iter().filter(|nb| !nb.is_disabled()) {
-            let out_queue_short = if let Ok(full_queue) = nb.out_queue() {
-                let mut q = full_queue.clone();
-                q.into_subtree_with_prefix(&shard_prefix, &mut 0)?;
-                q
-            } else {
-                let mut q = nb.out_queue_part()?.clone();
-                q.into_subtree_with_prefix(&shard_prefix, &mut 0)?;
-                q
-            };
+            let out_queue_short = nb.out_queue().or_else(|_| nb.out_queue_part())?
+                .subtree_with_prefix(&shard_prefix, &mut 0)?;
             if let Some(cell) = out_queue_short.data() {
-                roots.push(RootRecord::from_cell(cell, out_queue_short.bit_len(), nb.block_id().clone())?);
-                // roots.push(RootRecord::new(lt, cursor, bit_len, key, nb.block_id().clone()));
+                roots.push(RootRecord::from_cell(cell, out_queue_short.bit_len(), nb.shard().clone())?);
             }
         }
         if !roots.is_empty() {
